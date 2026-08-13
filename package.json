@@ -1,0 +1,17 @@
+{
+  "name": "aegis",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "contracts"
+  ],
+  "scripts": {
+    "build": "npm run build -w backend && npm run build -w frontend && npm run build -w contracts",
+    "test": "npm run test -w backend && npm run test -w frontend && npm run test -w contracts",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "compile:contracts": "npm run build -w contracts"
+  }
+}
