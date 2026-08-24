@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { Router } from "express";
 import { authRouter } from "./auth.routes.js";
 import { healthRouter } from "./health.routes.js";
+import { identityRouter } from "./identity.routes.js";
 
 export function registerRoutes(app: Express) {
   const apiRouter = Router();
@@ -15,6 +16,7 @@ export function registerRoutes(app: Express) {
   });
 
   apiRouter.use("/auth", authRouter);
+  apiRouter.use("/identities", identityRouter);
   apiRouter.use("/health", healthRouter);
 
   app.use("/api", apiRouter);
