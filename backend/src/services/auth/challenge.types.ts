@@ -24,4 +24,15 @@ export interface AuthVerificationResult {
   walletAddress: string;
   nonce: string;
   domain: string;
+  identity: {
+    identityId: string;
+    displayName: string;
+    status: "ACTIVE" | "REVOKED";
+    roles: string[];
+  };
+  session: {
+    sessionId: string;
+    accessToken: string;
+    expiresAt: string;
+  };
 }

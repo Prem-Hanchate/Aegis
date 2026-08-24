@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { createLoginChallengeController, verifyLoginChallengeController } from "../controllers/auth.controller.js";
+import {
+  createLoginChallengeController,
+  logoutController,
+  verifyLoginChallengeController,
+} from "../controllers/auth.controller.js";
 import { validateBody } from "../middleware/requestValidator.js";
 import { z } from "zod";
 
@@ -17,3 +21,4 @@ export const authRouter = Router();
 
 authRouter.post("/challenge", validateBody(createChallengeSchema), createLoginChallengeController);
 authRouter.post("/verify", validateBody(verifyChallengeSchema), verifyLoginChallengeController);
+authRouter.post("/logout", logoutController);

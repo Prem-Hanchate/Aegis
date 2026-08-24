@@ -4,6 +4,8 @@ import { AppError } from "../../middleware/AppError.js";
 import { AUTH_DOMAIN, AUTH_PURPOSE, createAuthMessage, parseAuthMessage } from "./auth-message.js";
 import { getChallenge, markChallengeUsed, saveChallenge } from "./challengeStore.js";
 import type { AuthVerificationResult, IssuedLoginChallenge } from "./challenge.types.js";
+import { getIdentityByWallet } from "../identity.service.js";
+import { createSession } from "../session.service.js";
 
 const DEFAULT_NONCE_TTL_SECONDS = 5 * 60;
 
@@ -95,11 +97,31 @@ export function verifyLoginChallenge(
     throw new AppError("The signature does not match the registered wallet.", 400, "AUTH_INVALID_SIGNATURE");
   }
 
+  const identity = getIdentityByWallet(challenge.walletAddress);
+  if (!identity) {
+    throw new AppError("No identity is registered for this wallet.", 403, "AUTH_IDENTITY_NOT_FOUND");
+  }
+  if (identity.status !== "ACTIVE") {
+    throw new AppError("The identity is revoked.", 403, "AUTH_IDENTITY_REVOKED");
+  }
+
   markChallengeUsed(challenge.nonce, toIsoString(now));
+  const { session, accessToken } = createSession(identity.identityId, now);
 
   return {
     walletAddress: challenge.walletAddress,
     nonce: challenge.nonce,
     domain: challenge.domain,
+    identity: {
+      identityId: identity.identityId,
+      displayName: identity.displayName,
+      status: identity.status,
+      roles: identity.roles,
+    },
+    session: {
+      sessionId: session.sessionId,
+      accessToken,
+      expiresAt: session.expiresAt,
+    },
   };
 }
