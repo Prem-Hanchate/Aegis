@@ -14,6 +14,10 @@ async function main() {
   const policyRegistry = await policyRegistryFactory.deploy(deployer.address, await identityRegistry.getAddress());
   await policyRegistry.waitForDeployment();
 
+  const revocationRegistryFactory = await ethers.getContractFactory("RevocationRegistry");
+  const revocationRegistry = await revocationRegistryFactory.deploy(deployer.address);
+  await revocationRegistry.waitForDeployment();
+
   const employeeRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:EMPLOYEE"));
   const managerRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:MANAGER"));
   const adminRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:ADMIN"));
@@ -42,6 +46,7 @@ async function main() {
   console.log(`AegisRegistry deployed to ${await aegisRegistry.getAddress()}`);
   console.log(`IdentityRegistry deployed to ${await identityRegistry.getAddress()}`);
   console.log(`PolicyRegistry deployed to ${await policyRegistry.getAddress()}`);
+  console.log(`RevocationRegistry deployed to ${await revocationRegistry.getAddress()}`);
 }
 
 void main().catch((error) => {
