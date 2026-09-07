@@ -2,11 +2,16 @@ import { ethers } from "hardhat";
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  const factory = await ethers.getContractFactory("AegisRegistry");
-  const contract = await factory.deploy(deployer.address);
-  await contract.waitForDeployment();
+  const aegisRegistryFactory = await ethers.getContractFactory("AegisRegistry");
+  const aegisRegistry = await aegisRegistryFactory.deploy(deployer.address);
+  await aegisRegistry.waitForDeployment();
 
-  console.log(`AegisRegistry deployed to ${await contract.getAddress()}`);
+  const identityRegistryFactory = await ethers.getContractFactory("IdentityRegistry");
+  const identityRegistry = await identityRegistryFactory.deploy(deployer.address);
+  await identityRegistry.waitForDeployment();
+
+  console.log(`AegisRegistry deployed to ${await aegisRegistry.getAddress()}`);
+  console.log(`IdentityRegistry deployed to ${await identityRegistry.getAddress()}`);
 }
 
 void main().catch((error) => {
