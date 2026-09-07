@@ -33,6 +33,13 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Identity-bound authentication | Done for initial slice | Only registered active identities can receive sessions |
 | Session issuance | Done for initial slice | Short-lived opaque access token is issued after successful authentication |
 | Session logout/revocation | Done for initial slice | Bearer-token logout and identity-wide invalidation are implemented |
+| Session authentication middleware | Done for initial slice | Protected routes validate bearer sessions and active identity status |
+| Centralized role/resource authorization | Done for initial slice | Employee, reports, and payroll resources use centralized role permissions |
+| Access decision audit events | Done for initial slice | Allow and deny decisions record structured in-memory audit events |
+| Device enrollment and session binding | Done for initial slice | Authenticated users can enroll a device and bind it to the active session |
+| Device revocation and replacement | Done for initial slice | Device lifecycle endpoints exist; revoked devices are denied protected resources |
+| Dynamic role permissions | Done for initial slice | Admin permission can grant/revoke role permissions through policy endpoints |
+| Protected audit retrieval | Done for initial slice | Audit events are readable only through the policy-management permission |
 | MongoDB persistence | Partial | Connection helper and Mongoose identity schema exist; services still use in-memory stores |
 | MetaMask UI connection | Pending | Frontend auth methods exist, but wallet connection and signing UI are not wired |
 | Persistent challenge storage | Pending | Current challenge storage is an in-memory map |
@@ -41,9 +48,9 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Policy and role contract | Pending | No policy state or permissions are implemented |
 | Revocation contract | Pending | No identity, device, or permission revocation state is implemented |
 | Blockchain client and event sync | Pending | No backend contract client, listeners, cache, or reconciliation |
-| Zero Trust authorization engine | Pending | No centralized identity, device, session, role, permission, resource, and action evaluation |
-| Device enrollment/replacement/revocation | Pending | Device service is empty |
-| Audit logging | Pending | Audit service is empty |
+| Zero Trust authorization engine | Partial | Session, identity, role, resource, and action checks exist; device, network, and policy storage are pending |
+| Device enrollment/replacement/revocation | Partial | In-memory lifecycle and protected-resource enforcement exist; persistence and recovery controls remain |
+| Audit logging | Partial | Access and policy decisions are recorded and admin-readable in memory; persistence and anchoring are pending |
 | Admin dashboard | Pending | No identity, policy, role, permission, device, or audit management screens |
 | End-to-end MVP demo | Pending | Full admin-to-user resource authorization flow is not connected |
 
@@ -142,6 +149,8 @@ Latest validation:
 
 ## 4. Remaining MVP Work
 
+The initial request-time security path is now implemented for sessions, roles, resources, and access-decision auditing. It is still an initial slice: policy definitions are static, device and network context are not evaluated yet, and audit events are not persisted.
+
 ### 4.1 Person 1: Identity, Authentication, and Database
 
 **Owner:** Person 1
@@ -219,6 +228,8 @@ Smart contracts
 
 **Owner:** Person 3
 
+Initial progress: session authentication middleware, centralized role/resource authorization, and protected employee, reports, and payroll resources are implemented. The following remains:
+
 Required work:
 
 - Create a centralized `authorizeRequest` service
@@ -263,6 +274,8 @@ Authenticated user
 ### 4.4 Person 4: Frontend, Admin, Audit, and Integration
 
 **Owner:** Person 4
+
+Initial progress: backend access-decision audit events are implemented in memory. Persistence, audit viewing, and blockchain anchoring remain.
 
 Required work:
 

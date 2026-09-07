@@ -6,6 +6,7 @@ const SESSION_TTL_SECONDS = 15 * 60;
 export interface Session {
   sessionId: string;
   identityId: string;
+  deviceId: string | null;
   tokenHash: string;
   createdAt: string;
   expiresAt: string;
@@ -24,6 +25,7 @@ export function createSession(identityId: string, now = new Date()) {
   const session: Session = {
     sessionId: randomUUID(),
     identityId,
+    deviceId: null,
     tokenHash: hashToken(accessToken),
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString(),
@@ -69,4 +71,25 @@ export function revokeSessionsForIdentity(identityId: string, now = new Date()) 
 
 export function clearSessionStore() {
   sessions.clear();
+}
+
+export function attachDeviceToSession(sessionId: string, deviceId: string) {
+  const session = sessions.get(sessionId);
+  if (!session || session.status !== "ACTIVE") {
+    throw new AppError("The session is invalid or revoked.", 401, "SESSION_INVALID");
+  }
+  const updatedSession = { ...session, deviceId };
+  sessions.set(sessionId, updatedSession);
+  return updatedSession;
+}
+
+export function revokeAllSessionsForIdentity(identityId: string, now = new Date()) {
+  let revokedCount = 0;
+  for (const session of sessions.values()) {
+    if (session.identityId === identityId && session.status === "ACTIVE") {
+      sessions.set(session.sessionId, { ...session, status: "REVOKED", revokedAt: now.toISOString() });
+      revokedCount += 1;
+    }
+  }
+  return revokedCount;
 }

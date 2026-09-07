@@ -67,6 +67,18 @@ export function getIdentityByWallet(walletAddress: string) {
   return findByWallet(walletAddress);
 }
 
+export function updateIdentityProfile(identityId: string, displayName: string) {
+  const identity = getIdentity(identityId);
+  const normalizedDisplayName = displayName.trim();
+  if (!normalizedDisplayName) {
+    throw new AppError("Display name is required.", 400, "IDENTITY_INVALID_DISPLAY_NAME");
+  }
+
+  const updatedIdentity = { ...identity, displayName: normalizedDisplayName, updatedAt: new Date().toISOString() };
+  identities.set(identityId, updatedIdentity);
+  return updatedIdentity;
+}
+
 export function updateIdentityStatus(identityId: string, status: IdentityStatus) {
   const identity = getIdentity(identityId);
   const updatedIdentity = { ...identity, status, updatedAt: new Date().toISOString() };
@@ -79,4 +91,31 @@ export function updateIdentityStatus(identityId: string, status: IdentityStatus)
 
 export function clearIdentityStore() {
   identities.clear();
+}
+
+export function assignRole(identityId: string, role: string) {
+  const identity = getIdentity(identityId);
+  const normalizedRole = role.trim();
+  if (!normalizedRole) {
+    throw new AppError("Role is required.", 400, "IDENTITY_INVALID_ROLE");
+  }
+
+  if (identity.roles.includes(normalizedRole)) {
+    return identity;
+  }
+
+  const updatedIdentity = { ...identity, roles: [...identity.roles, normalizedRole], updatedAt: new Date().toISOString() };
+  identities.set(identityId, updatedIdentity);
+  return updatedIdentity;
+}
+
+export function removeRole(identityId: string, role: string) {
+  const identity = getIdentity(identityId);
+  const updatedIdentity = {
+    ...identity,
+    roles: identity.roles.filter((assignedRole) => assignedRole !== role.trim()),
+    updatedAt: new Date().toISOString(),
+  };
+  identities.set(identityId, updatedIdentity);
+  return updatedIdentity;
 }

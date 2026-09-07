@@ -17,3 +17,18 @@ export function healthCheckController(_request: Request, response: Response) {
     },
   });
 }
+
+export function readinessCheckController(_request: Request, response: Response) {
+  const database = getDatabaseStatus();
+  const ready = database.connected && database.readyState === 1;
+
+  return response.status(ready ? 200 : 503).json({
+    status: ready ? "ready" : "not_ready",
+    service: "aegis-backend",
+    database: {
+      connected: database.connected,
+      readyState: database.readyState,
+      name: database.name,
+    },
+  });
+}

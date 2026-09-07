@@ -2,11 +2,12 @@ import dotenv from "dotenv";
 import { z } from "zod";
 
 dotenv.config();
+dotenv.config({ path: "../.env" });
 
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
-  MONGODB_URI: z.string().optional().default(""),
+  MONGODB_URI: z.string().trim().min(1, "MONGODB_URI is required."),
   FRONTEND_ORIGIN: z.string().url().default("http://localhost:5173"),
 });
 

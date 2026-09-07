@@ -1,9 +1,13 @@
 import type { Request, Response } from "express";
 import { AppError } from "../middleware/AppError.js";
 import {
+  assignRole,
   getIdentity,
+  getIdentityByWallet,
   listIdentities,
+  removeRole,
   registerIdentity,
+  updateIdentityProfile,
   updateIdentityStatus,
   type IdentityStatus,
 } from "../services/identity.service.js";
@@ -34,4 +38,35 @@ function getIdentityId(request: Request) {
     throw new AppError("Identity id is required.", 400, "IDENTITY_INVALID_ID");
   }
   return identityId;
+}
+
+export function assignIdentityRoleController(request: Request, response: Response) {
+  const identityId = getIdentityId(request);
+  const { role } = request.body as { role: string };
+  return response.status(200).json({ identity: assignRole(identityId, role) });
+}
+
+export function removeIdentityRoleController(request: Request, response: Response) {
+  const identityId = getIdentityId(request);
+  const role = request.body.role as string;
+  return response.status(200).json({ identity: removeRole(identityId, role) });
+}
+
+export function getIdentityByWalletController(request: Request, response: Response) {
+  const walletAddress = request.params.walletAddress;
+  if (typeof walletAddress !== "string" || !walletAddress) {
+    throw new AppError("Wallet address is required.", 400, "IDENTITY_INVALID_WALLET_ADDRESS");
+  }
+
+  const identity = getIdentityByWallet(walletAddress);
+  if (!identity) {
+    throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
+  }
+  return response.status(200).json({ identity });
+}
+
+export function updateIdentityProfileController(request: Request, response: Response) {
+  const identityId = getIdentityId(request);
+  const { displayName } = request.body as { displayName: string };
+  return response.status(200).json({ identity: updateIdentityProfile(identityId, displayName) });
 }
