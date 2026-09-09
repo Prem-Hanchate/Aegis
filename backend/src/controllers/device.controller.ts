@@ -9,6 +9,7 @@ import {
   touchDevice,
   type DeviceStatus,
 } from "../services/device.service.js";
+import { submitBlockchainWrite } from "../services/blockchain.service.js";
 
 export function createDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
@@ -40,9 +41,11 @@ export function listDevicesController(request: Request, response: Response) {
   });
 }
 
-export function revokeDeviceController(request: Request, response: Response) {
+export async function revokeDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
-  return response.status(200).json({ device: revokeDevice(getDeviceId(request), auth.identityId) });
+  const deviceId = getDeviceId(request);
+  const transaction = await submitBlockchainWrite((client) => client.revokeDevice(deviceId));
+  return response.status(200).json({ device: revokeDevice(deviceId, auth.identityId), transaction });
 }
 
 export function replaceDeviceController(request: Request, response: Response) {

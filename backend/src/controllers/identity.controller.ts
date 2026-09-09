@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { AppError } from "../middleware/AppError.js";
+import { submitBlockchainWrite } from "../services/blockchain.service.js";
 import {
   assignRole,
+  assertIdentityRegistrationAvailable,
   getIdentity,
   getIdentityByWallet,
   listIdentities,
@@ -12,9 +15,17 @@ import {
   type IdentityStatus,
 } from "../services/identity.service.js";
 
-export function createIdentityController(request: Request, response: Response) {
+export async function createIdentityController(request: Request, response: Response) {
   const { walletAddress, displayName } = request.body as { walletAddress: string; displayName: string };
-  return response.status(201).json({ identity: registerIdentity(walletAddress, displayName) });
+  assertIdentityRegistrationAvailable(walletAddress);
+  const identityId = randomUUID();
+  const transaction = await submitBlockchainWrite(async (client) => ({
+    registration: await client.registerIdentity(identityId, walletAddress),
+    activation: await client.activateIdentity(identityId),
+    status: "confirmed" as const,
+  }));
+  const identity = registerIdentity(walletAddress, displayName, identityId);
+  return response.status(201).json({ identity, transaction });
 }
 
 export function listIdentitiesController(_request: Request, response: Response) {
@@ -26,10 +37,13 @@ export function getIdentityController(request: Request, response: Response) {
   return response.status(200).json({ identity: getIdentity(identityId) });
 }
 
-export function updateIdentityStatusController(request: Request, response: Response) {
+export async function updateIdentityStatusController(request: Request, response: Response) {
   const { status } = request.body as { status: IdentityStatus };
   const identityId = getIdentityId(request);
-  return response.status(200).json({ identity: updateIdentityStatus(identityId, status) });
+  const transaction = status === "ACTIVE"
+    ? await submitBlockchainWrite((client) => client.activateIdentity(identityId))
+    : await submitBlockchainWrite((client) => client.revokeIdentity(identityId));
+  return response.status(200).json({ identity: updateIdentityStatus(identityId, status), transaction });
 }
 
 function getIdentityId(request: Request) {
@@ -40,16 +54,18 @@ function getIdentityId(request: Request) {
   return identityId;
 }
 
-export function assignIdentityRoleController(request: Request, response: Response) {
+export async function assignIdentityRoleController(request: Request, response: Response) {
   const identityId = getIdentityId(request);
   const { role } = request.body as { role: string };
-  return response.status(200).json({ identity: assignRole(identityId, role) });
+  const transaction = await submitBlockchainWrite((client) => client.assignRole(identityId, role));
+  return response.status(200).json({ identity: assignRole(identityId, role), transaction });
 }
 
-export function removeIdentityRoleController(request: Request, response: Response) {
+export async function removeIdentityRoleController(request: Request, response: Response) {
   const identityId = getIdentityId(request);
   const role = request.body.role as string;
-  return response.status(200).json({ identity: removeRole(identityId, role) });
+  const transaction = await submitBlockchainWrite((client) => client.removeRole(identityId, role));
+  return response.status(200).json({ identity: removeRole(identityId, role), transaction });
 }
 
 export function getIdentityByWalletController(request: Request, response: Response) {

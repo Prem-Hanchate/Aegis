@@ -30,15 +30,19 @@ function findByWallet(walletAddress: string) {
   return [...identities.values()].find((identity) => identity.walletAddress === normalizedWalletAddress) ?? null;
 }
 
-export function registerIdentity(walletAddress: string, displayName: string): Identity {
-  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
-  if (findByWallet(normalizedWalletAddress)) {
+export function assertIdentityRegistrationAvailable(walletAddress: string) {
+  if (findByWallet(walletAddress)) {
     throw new AppError("An identity already exists for this wallet.", 409, "IDENTITY_ALREADY_EXISTS");
   }
+}
+
+export function registerIdentity(walletAddress: string, displayName: string, identityId = randomUUID()): Identity {
+  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
+  assertIdentityRegistrationAvailable(normalizedWalletAddress);
 
   const now = new Date().toISOString();
   const identity: Identity = {
-    identityId: randomUUID(),
+    identityId,
     walletAddress: normalizedWalletAddress,
     displayName: displayName.trim(),
     status: "ACTIVE",

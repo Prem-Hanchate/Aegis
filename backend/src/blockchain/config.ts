@@ -6,6 +6,8 @@ export interface BlockchainConfig {
   identityRegistryAddress: string;
   policyRegistryAddress: string;
   revocationRegistryAddress: string;
+  signerPrivateKey?: string;
+  confirmations?: number;
 }
 
 function requiredValue(source: NodeJS.ProcessEnv, name: string) {
@@ -46,11 +48,23 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
     throw new Error("Blockchain configuration CHAIN_ID must be positive.");
   }
 
+  const confirmationsValue = source.BLOCKCHAIN_CONFIRMATIONS?.trim() ?? "1";
+  if (!/^\d+$/.test(confirmationsValue) || Number(confirmationsValue) < 1) {
+    throw new Error("Blockchain configuration contains an invalid BLOCKCHAIN_CONFIRMATIONS.");
+  }
+
   return {
     rpcUrl,
     chainId,
     identityRegistryAddress: parseAddress(source, "IDENTITY_REGISTRY_ADDRESS"),
     policyRegistryAddress: parseAddress(source, "POLICY_REGISTRY_ADDRESS"),
     revocationRegistryAddress: parseAddress(source, "REVOCATION_REGISTRY_ADDRESS"),
+    signerPrivateKey: source.BACKEND_SIGNER_PRIVATE_KEY?.trim() || undefined,
+    confirmations: Number(confirmationsValue),
   };
+}
+
+export function hasBlockchainConfiguration(source: NodeJS.ProcessEnv = process.env) {
+  return ["RPC_URL", "CHAIN_ID", "IDENTITY_REGISTRY_ADDRESS", "POLICY_REGISTRY_ADDRESS", "REVOCATION_REGISTRY_ADDRESS"]
+    .some((name) => Boolean(source[name]?.trim()));
 }

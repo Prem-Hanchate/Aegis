@@ -1,4 +1,4 @@
-import { Contract, getAddress, isAddress, isHexString, keccak256, toUtf8Bytes } from "ethers";
+import { Contract, getAddress, isAddress, isHexString, keccak256, NonceManager, toUtf8Bytes, Wallet } from "ethers";
 import type { JsonRpcProvider } from "ethers";
 import { loadBlockchainConfig, type BlockchainConfig } from "./config.js";
 import { createBlockchainContracts } from "./contracts.js";
@@ -40,11 +40,19 @@ export function blockchainPermissionId(resource: string, action: string) {
   return keccak256(toUtf8Bytes(`AegisPermission:v1:${resource}:${action}`));
 }
 
+export interface BlockchainTransaction {
+  operation: string;
+  hash: string;
+  status: "confirmed";
+  blockNumber: number | null;
+}
+
 export class BlockchainClient {
   private constructor(
     private readonly provider: JsonRpcProvider,
     private readonly config: BlockchainConfig,
     private readonly contracts: ReturnType<typeof createBlockchainContracts>,
+    private readonly signer: NonceManager | null,
   ) {}
 
   static async connect(config = loadBlockchainConfig(), provider = createBlockchainProvider(config)) {
@@ -72,7 +80,89 @@ export class BlockchainClient {
       }
     }
 
-    return new BlockchainClient(provider, config, createBlockchainContracts(provider, config));
+    let signer: NonceManager | null = null;
+    if (config.signerPrivateKey) {
+      try {
+        signer = new NonceManager(new Wallet(config.signerPrivateKey, provider));
+      } catch {
+        throw new Error("Blockchain signer configuration is invalid.");
+      }
+    }
+    return new BlockchainClient(provider, config, createBlockchainContracts(provider, config), signer);
+  }
+
+  private async send(operation: string, contract: Contract, method: string, args: readonly unknown[]) {
+    if (!this.signer) throw new Error("Blockchain signer is not configured for write operations.");
+
+    try {
+      const transaction = await contract.connect(this.signer).getFunction(method)(...args);
+      const receipt = await transaction.wait(this.config.confirmations ?? 1);
+      if (!receipt || receipt.status !== 1) throw new Error("Transaction was reverted.");
+      return { operation, hash: receipt.hash, status: "confirmed" as const, blockNumber: receipt.blockNumber };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown transaction failure.";
+      throw new Error(`Blockchain transaction failed for ${operation}: ${message}`);
+    }
+  }
+
+  async registerIdentity(identityId: string, walletAddress: string) {
+    if (!isAddress(walletAddress)) throw new Error("walletAddress must be a valid Ethereum address.");
+    return this.send("IdentityRegistry.registerIdentity", this.contracts.identityRegistry, "registerIdentity", [identityIdForBackendId(identityId), getAddress(walletAddress)]);
+  }
+
+  async activateIdentity(identityId: string) {
+    return this.send("IdentityRegistry.activateIdentity", this.contracts.identityRegistry, "activateIdentity", [identityIdForBackendId(identityId)]);
+  }
+
+  async revokeIdentity(identityId: string) {
+    const identityTransaction = await this.send("IdentityRegistry.revokeIdentity", this.contracts.identityRegistry, "revokeIdentity", [identityIdForBackendId(identityId)]);
+    const revocationTransaction = await this.send("RevocationRegistry.revokeIdentity", this.contracts.revocationRegistry, "revokeIdentity", [identityIdForBackendId(identityId)]);
+    return { operation: "identity.revoke", status: "confirmed" as const, transactions: [identityTransaction, revocationTransaction] };
+  }
+
+  async assignRole(identityId: string, role: string) {
+    const roleId = blockchainRoleId(role);
+    const transactions = [];
+    try {
+      await this.contracts.policyRegistry.getFunction("getRole")(roleId);
+    } catch {
+      transactions.push(await this.send("PolicyRegistry.createRole", this.contracts.policyRegistry, "createRole", [roleId]));
+    }
+    transactions.push(await this.send("PolicyRegistry.assignRole", this.contracts.policyRegistry, "assignRole", [identityIdForBackendId(identityId), roleId]));
+    return { operation: "identity.assignRole", status: "confirmed" as const, transactions };
+  }
+
+  async removeRole(identityId: string, role: string) {
+    return this.send("PolicyRegistry.removeRole", this.contracts.policyRegistry, "removeRole", [identityIdForBackendId(identityId), blockchainRoleId(role)]);
+  }
+
+  async createPolicy(role: string, resource: string, action: string) {
+    const roleId = blockchainRoleId(role);
+    const permissionId = blockchainPermissionId(resource, action);
+    const transactions = [];
+    try {
+      await this.contracts.policyRegistry.getFunction("getRole")(roleId);
+    } catch {
+      transactions.push(await this.send("PolicyRegistry.createRole", this.contracts.policyRegistry, "createRole", [roleId]));
+    }
+    try {
+      await this.contracts.policyRegistry.getFunction("getPermission")(permissionId);
+    } catch {
+      transactions.push(await this.send("PolicyRegistry.createPermission", this.contracts.policyRegistry, "createPermission", [permissionId, keccak256(toUtf8Bytes(resource)), keccak256(toUtf8Bytes(action))]));
+    }
+    transactions.push(await this.send("PolicyRegistry.grantPermissionToRole", this.contracts.policyRegistry, "grantPermissionToRole", [roleId, permissionId]));
+    return { operation: "policy.create", status: "confirmed" as const, transactions };
+  }
+
+  async revokePolicy(role: string, resource: string, action: string) {
+    const permissionId = blockchainPermissionId(resource, action);
+    const transaction = await this.send("PolicyRegistry.revokePermissionFromRole", this.contracts.policyRegistry, "revokePermissionFromRole", [blockchainRoleId(role), permissionId]);
+    const index = await this.send("RevocationRegistry.revokePermission", this.contracts.revocationRegistry, "revokePermission", [permissionId]);
+    return { operation: "policy.revoke", status: "confirmed" as const, transactions: [transaction, index] };
+  }
+
+  async revokeDevice(deviceId: string) {
+    return this.send("RevocationRegistry.revokeDevice", this.contracts.revocationRegistry, "revokeDevice", [requireBytes32(deviceId, "deviceId")]);
   }
 
   async getIdentity(identityId: string): Promise<BlockchainIdentity> {
