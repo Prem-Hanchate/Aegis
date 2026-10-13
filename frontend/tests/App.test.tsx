@@ -1,26 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { App } from "../src/App";
-
-const healthResponse = {
-  status: "ok",
-  service: "aegis-backend",
-  environment: "test",
-  timestamp: new Date().toISOString(),
-  database: {
-    connected: false,
-    readyState: 0,
-    name: null,
-  },
-};
 
 describe("App", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => healthResponse,
-      }),
+      vi.fn(),
     );
   });
 
@@ -28,10 +13,10 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the dashboard and loads backend health", async () => {
+  it("renders the wallet login gateway", () => {
     render(<App />);
 
-    expect(screen.getByText(/Decentralized Identity/i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText(/Service: aegis-backend/i)).toBeInTheDocument());
+    expect(screen.getByText(/Sign in to Aegis/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Connect wallet/i })).toBeInTheDocument();
   });
 });

@@ -18,6 +18,7 @@ export interface AuthVerificationResponse {
     domain: string;
     identity: {
       identityId: string;
+      walletAddress: string;
       displayName: string;
       status: "ACTIVE" | "REVOKED";
       roles: string[];
@@ -28,4 +29,24 @@ export interface AuthVerificationResponse {
       expiresAt: string;
     };
   };
+}
+
+export interface AuthIdentityRecord {
+  identityId: string;
+  walletAddress: string;
+  displayName: string;
+  status: "ACTIVE" | "REVOKED";
+  roles: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AuthMeResponse {
+  session: {
+    sessionId: string;
+    identityId: string;
+    expiresAt: string;
+    deviceId: string | null;
+  };
+  identity: AuthIdentityRecord;
 }

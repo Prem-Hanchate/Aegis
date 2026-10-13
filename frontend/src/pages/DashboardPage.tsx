@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 import { fetchBackendHealth } from "../services/api";
+import { fetchDevices, type DeviceSummary } from "../services/api";
+import { useAuthState } from "../context/auth";
+import { useNavigate } from "react-router-dom";
 import type { BackendHealthResponse } from "../types/health";
 
 export function DashboardPage() {
+  const { state } = useAuthState();
+  const navigate = useNavigate();
   const [health, setHealth] = useState<BackendHealthResponse | null>(null);
+  const [devices, setDevices] = useState<DeviceSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,29 +41,36 @@ export function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!state.session) return;
+    void fetchDevices(state.session.accessToken)
+      .then((response) => setDevices(response.devices))
+      .catch(() => setDevices([]));
+  }, [state.session]);
+
+  function openResource(resourceName: "employee" | "reports" | "payroll") {
+    navigate(`/resources/${resourceName}`);
+  }
+
   return (
-    <section className="hero-grid">
-      <div className="panel panel-large">
-        <p className="eyebrow">Phase 1 foundation</p>
-        <h2>Wallet authentication and Zero Trust authorization will land here.</h2>
-        <p>
-          This shell already separates frontend routing, backend APIs, contract scaffolding, and shared security
-          boundaries so later phases can add identity, device, session, and policy logic without refactoring the base.
-        </p>
+    <section className="dashboard-grid">
+      <div className="panel panel-featured">
+        <p className="eyebrow">Authenticated workspace</p>
+        <h2>Welcome back, {state.identity?.displayName ?? "Aegis operator"}.</h2>
+        <p>Every request is checked against your identity, active session, enrolled device, and assigned policy.</p>
+        <div className="identity-line"><span className="status-dot" />{state.identity?.walletAddress}</div>
         <div className="status-row">
-          <span className="status-badge status-badge-muted">React</span>
-          <span className="status-badge status-badge-muted">Express</span>
-          <span className="status-badge status-badge-muted">Hardhat</span>
+          {state.roles.length ? state.roles.map((role) => <span className="status-badge" key={role}>{role}</span>) : <span className="status-badge status-badge-muted">No roles assigned</span>}
         </div>
       </div>
 
       <div className="panel">
-        <h3>Phase 2 authentication</h3>
-        <p>
-          The backend now exposes <code>/api/auth/challenge</code> and <code>/api/auth/verify</code> for wallet-based
-          challenge-response authentication with nonce replay protection.
-        </p>
-        <p>Frontend auth service methods are ready for MetaMask integration in the next UI pass.</p>
+        <h3>Session posture</h3>
+        <ul className="details-list">
+          <li><span>Session</span><strong>Active</strong></li>
+          <li><span>Expires</span><strong>{state.session ? new Date(state.session.expiresAt).toLocaleTimeString() : "-"}</strong></li>
+          <li><span>Devices</span><strong>{devices.filter((device) => device.status === "ACTIVE").length} active</strong></li>
+        </ul>
       </div>
 
       <div className="panel">
@@ -72,6 +85,14 @@ export function DashboardPage() {
             <li>Database: {health.database.connected ? "connected" : "not connected yet"}</li>
           </ul>
         ) : null}
+      </div>
+
+      <div className="panel resource-panel">
+        <div className="panel-heading"><div><p className="eyebrow">Policy-gated</p><h3>Protected resources</h3></div><span className="status-badge status-badge-muted">Live checks</span></div>
+        <div className="resource-actions">
+          {(["employee", "reports", "payroll"] as const).map((resourceName) => <button className="resource-button" key={resourceName} type="button" onClick={() => void openResource(resourceName)}>{resourceName}</button>)}
+        </div>
+        <p className="muted-text">Choose a resource to open its dedicated authorization view.</p>
       </div>
     </section>
   );

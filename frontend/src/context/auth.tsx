@@ -10,6 +10,7 @@ export interface AuthIdentity {
 
 export interface AuthSession {
   sessionId: string;
+  accessToken: string;
   expiresAt: string;
 }
 
@@ -38,11 +39,32 @@ const initialAuthState: AuthState = {
   errorMessage: null,
 };
 
+const authStorageKey = "aegis.auth.session";
+
 const AuthStateContext = createContext<AuthStateContextValue | null>(null);
 
 export function AuthStateProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>(initialAuthState);
-  const value = useMemo(() => ({ state, setState }), [state]);
+  const [state, setState] = useState<AuthState>(() => {
+    try {
+      const stored = window.localStorage.getItem(authStorageKey);
+      return stored ? (JSON.parse(stored) as AuthState) : initialAuthState;
+    } catch {
+      return initialAuthState;
+    }
+  });
+
+  const updateState: Dispatch<SetStateAction<AuthState>> = (nextState) => {
+    setState((currentState) => {
+      const resolvedState = typeof nextState === "function" ? nextState(currentState) : nextState;
+      if (resolvedState.status === "authenticated" && resolvedState.session) {
+        window.localStorage.setItem(authStorageKey, JSON.stringify(resolvedState));
+      } else {
+        window.localStorage.removeItem(authStorageKey);
+      }
+      return resolvedState;
+    });
+  };
+  const value = useMemo(() => ({ state, setState: updateState }), [state]);
 
   return <AuthStateContext.Provider value={value}>{children}</AuthStateContext.Provider>;
 }

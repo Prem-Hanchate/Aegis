@@ -10,14 +10,14 @@ This repository is organized as a small monorepo with three parts:
 - `backend/` - Node.js + Express + TypeScript API
 - `contracts/` - Hardhat + Solidity smart contracts
 
-Phase 1 establishes the application foundation only. Authentication, authorization, device policy, and blockchain state sync are intentionally kept minimal until later phases.
+The foundation, initial wallet authentication flow, protected dashboard, and first administration control center are implemented. MongoDB persistence and blockchain state synchronization remain later stages.
 
 ## Requirements
 
 - Node.js 20 or newer
 - npm 10 or newer
 - MongoDB available locally or remotely for later phases
-- MetaMask installed for later authentication phases
+- MetaMask installed for wallet authentication
 
 ## Setup
 
@@ -59,7 +59,15 @@ npm run build -w contracts
 npm test
 ```
 
-## Phase 1 Scope
+7. Start the local production-shaped stack:
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+The frontend is available at `http://localhost`, and its Nginx proxy forwards `/api` requests to the backend. Set the RPC and deployed contract address variables before using blockchain features.
+
+## Current Scope
 
 Implemented in this phase:
 
@@ -75,19 +83,19 @@ Implemented in this phase:
 - Request validation helper
 - Health-check endpoint
 - Frontend health status page
+- MetaMask challenge/sign/verify login page
+- Protected authenticated dashboard
+- Identity, device, policy, audit, resource, and session control center
 - Hardhat project scaffolding
 - Solidity contract scaffold
 - Contract test scaffold
 
-Not implemented yet:
+Still remaining:
 
-- Wallet challenge-response authentication
-- Session issuance and revocation
-- Role and permission management
-- Zero Trust authorization engine
-- Device enrollment and revocation flows
-- Audit anchoring logic
-- Production deployment scripts
+- MongoDB repositories and persistent stores
+- Functional blockchain synchronization and deployed contract integration
+- Audit hash anchoring
+- Full end-to-end integration environment
 
 ## Folder Structure
 
@@ -104,4 +112,4 @@ contracts/
 
 ## Notes
 
-The backend is designed to start without a MongoDB URI so the phase 1 health check can run in isolation. Later phases will require a real MongoDB configuration.
+The backend currently uses in-memory runtime stores for most identity, session, device, policy, and audit data. MongoDB is required for durable data and production use.
