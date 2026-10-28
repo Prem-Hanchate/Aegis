@@ -3,12 +3,14 @@ import { requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { AppError } from "../middleware/AppError.js";
 import {
   enrollDevice,
+  getActiveDevice,
   listDevicesForIdentityWithFilter,
   replaceDevice,
   revokeDevice,
   touchDevice,
   type DeviceStatus,
 } from "../services/device.service.js";
+import { attachDeviceToSession } from "../services/session.service.js";
 import { submitBlockchainWrite } from "../services/blockchain.service.js";
 
 export function createDeviceController(request: Request, response: Response) {
@@ -44,16 +46,30 @@ export function listDevicesController(request: Request, response: Response) {
 export async function revokeDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   const deviceId = getDeviceId(request);
+  // Verify device exists, is owned by caller, and is active before executing revocation
+  getActiveDevice(deviceId, auth.identityId);
   const transaction = await submitBlockchainWrite((client) => client.revokeDevice(deviceId));
   return response.status(200).json({ device: revokeDevice(deviceId, auth.identityId), transaction });
 }
 
-export function replaceDeviceController(request: Request, response: Response) {
+export async function replaceDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
+  const oldDeviceId = getDeviceId(request);
   const { name, fingerprint } = request.body as { name: string; fingerprint: string };
-  return response.status(201).json({
-    device: replaceDevice(getDeviceId(request), auth.identityId, auth.sessionId, name, fingerprint),
-  });
+  // Verify old device exists, is owned by caller, and is active before executing replacement
+  getActiveDevice(oldDeviceId, auth.identityId);
+  const transaction = await submitBlockchainWrite((client) => client.revokeDevice(oldDeviceId));
+  const device = replaceDevice(oldDeviceId, auth.identityId, auth.sessionId, name, fingerprint);
+  return response.status(201).json({ device, transaction });
+}
+
+export function bindDeviceController(request: Request, response: Response) {
+  const { auth } = requireAuthenticatedRequest(request);
+  const deviceId = getDeviceId(request);
+  // Only valid active devices owned by the authenticated identity can be bound to the session
+  const device = getActiveDevice(deviceId, auth.identityId);
+  attachDeviceToSession(auth.sessionId, device.deviceId);
+  return response.status(200).json({ device, message: "Device bound to session successfully." });
 }
 
 function getDeviceId(request: Request) {
