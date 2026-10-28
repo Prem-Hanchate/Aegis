@@ -43,8 +43,9 @@ export interface AuthMeResponse {
   session: {
     sessionId: string;
     identityId: string;
-    roles: string[];
+    roles?: string[];
+    expiresAt?: string;
     deviceId: string | null;
   };
   identity: AuthIdentityRecord;
-}
+}

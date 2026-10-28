@@ -3,6 +3,7 @@ import { Wallet } from "ethers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { clearIdentityStore } from "../src/services/identity.service.js";
+import { assignRole } from "../src/services/identity.service.js";
 
 describe("identity endpoints", () => {
   beforeEach(() => {
@@ -27,13 +28,20 @@ describe("identity endpoints", () => {
     });
 
     const identityId = createResponse.body.identity.identityId as string;
-    const listResponse = await request(app).get("/api/identities");
+    assignRole(identityId, "admin");
+    const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
+    const message = challenge.body.challenge.message as string;
+    const signature = await wallet.signMessage(message);
+    const verification = await request(app).post("/api/auth/verify").send({ walletAddress: wallet.address, message, signature });
+    const accessToken = verification.body.result.session.accessToken as string;
+
+    const listResponse = await request(app).get("/api/identities").set("Authorization", `Bearer ${accessToken}`);
     expect(listResponse.body.identities).toHaveLength(1);
 
-    const readResponse = await request(app).get(`/api/identities/${identityId}`);
+    const readResponse = await request(app).get(`/api/identities/${identityId}`).set("Authorization", `Bearer ${accessToken}`);
     expect(readResponse.body.identity.identityId).toBe(identityId);
 
-    const revokeResponse = await request(app).patch(`/api/identities/${identityId}/status`).send({
+    const revokeResponse = await request(app).patch(`/api/identities/${identityId}/status`).set("Authorization", `Bearer ${accessToken}`).send({
       status: "REVOKED",
     });
     expect(revokeResponse.body.identity.status).toBe("REVOKED");

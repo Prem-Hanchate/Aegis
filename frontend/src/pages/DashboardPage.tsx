@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthState } from "../context/auth";
 import {
   fetchBackendHealth,
@@ -15,6 +15,7 @@ type ResourceName = "employee" | "reports" | "payroll";
 
 export function DashboardPage() {
   const { state, clearSession } = useAuthState();
+  const navigate = useNavigate();
 
   // Health state
   const [health, setHealth] = useState<BackendHealthResponse | null>(null);
@@ -203,7 +204,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Real Resource Access Evaluation */}
+      {/* Live Resource Access Evaluation */}
       <div className="panel resource-panel">
         <div className="panel-heading">
           <div>
@@ -283,6 +284,30 @@ export function DashboardPage() {
             </li>
           </ul>
         ) : null}
+      </div>
+
+      {/* Dedicated Resource Authorization Pages */}
+      <div className="panel resource-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Dedicated Views</p>
+            <h3>Protected Resource Pages</h3>
+          </div>
+          <span className="status-badge status-badge-muted">Direct Views</span>
+        </div>
+        <p className="muted-text">Navigate directly to dedicated resource authorization pages.</p>
+        <div className="resource-actions">
+          {(["employee", "reports", "payroll"] as const).map((resourceName) => (
+            <button
+              className="resource-button"
+              key={resourceName}
+              type="button"
+              onClick={() => navigate(`/resources/${resourceName}`)}
+            >
+              View {resourceName} ↗
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   );
