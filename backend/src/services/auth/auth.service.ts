@@ -6,6 +6,7 @@ import { getChallenge, markChallengeUsed, saveChallenge } from "./challengeStore
 import type { AuthVerificationResult, IssuedLoginChallenge } from "./challenge.types.js";
 import { getIdentityByWallet } from "../identity.service.js";
 import { createSession } from "../session.service.js";
+import { getPermissionsForRoles } from "../authorization/authorization.service.js";
 
 const DEFAULT_NONCE_TTL_SECONDS = 5 * 60;
 
@@ -117,6 +118,7 @@ export function verifyLoginChallenge(
       displayName: identity.displayName,
       status: identity.status,
       roles: identity.roles,
+      permissions: getPermissionsForRoles(identity.roles),
     },
     session: {
       sessionId: session.sessionId,

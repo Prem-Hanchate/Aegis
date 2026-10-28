@@ -34,9 +34,16 @@ export function Layout() {
             <NavLink to="/devices" className={navLinkClassName}>
               Devices
             </NavLink>
-            <NavLink to="/control-center" className={navLinkClassName}>
-              Control center
-            </NavLink>
+            {state.permissions.includes("policies:manage") ? (
+              <>
+                <NavLink to="/identities" className={navLinkClassName}>
+                  Identities
+                </NavLink>
+                <NavLink to="/control-center" className={navLinkClassName}>
+                  Control center
+                </NavLink>
+              </>
+            ) : null}
             <NavLink to="/health" className={navLinkClassName}>
               Health
             </NavLink>

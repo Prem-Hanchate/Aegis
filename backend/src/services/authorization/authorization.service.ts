@@ -9,10 +9,20 @@ const rolePermissions: Record<string, Set<string>> = {
   admin: new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]),
 };
 
-export function authorizeRequest(identityId: string, resource: string, action: string) {
+export function getPermissionsForRoles(roles: string[]) {
+  return [...new Set(roles.flatMap((role) => [...(rolePermissions[role] ?? [])]))];
+}
+
+export function hasPermission(identityId: string, resource: string, action: string) {
   const identity = getIdentity(identityId);
   const permission = `${resource}:${action}`;
-  const allowed = identity.status === "ACTIVE" && identity.roles.some((role) => rolePermissions[role]?.has(permission));
+  return identity.status === "ACTIVE"
+    && getPermissionsForRoles(identity.roles).includes(permission);
+}
+
+export function authorizeRequest(identityId: string, resource: string, action: string) {
+  const identity = getIdentity(identityId);
+  const allowed = hasPermission(identityId, resource, action);
 
   recordAuditEvent({
     eventType: "ACCESS_DECISION",

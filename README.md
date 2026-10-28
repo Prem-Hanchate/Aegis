@@ -124,3 +124,16 @@ npm run build
 - **Protected Resources**:
   - `GET /api/resources/:resource`: Policy-evaluated resource access (`employee`, `reports`, `payroll`), requiring both valid role permissions and an active bound device.
 
+## Identity Administration
+
+Identity administration is available at `/identities` to authenticated users with the effective
+`policies:manage` permission. The interface supports wallet-validated registration, directory
+search/status filters, identity details, profile updates, activation, revocation, and role
+assignment/removal. Revocation invalidates active sessions and prevents subsequent wallet
+authentication.
+
+Identity management endpoints are administrative server-side operations. Identity creation and
+wallet lookup are not public endpoints; ordinary users cannot use them or change roles. Administrators
+cannot change their own roles, preventing self-escalation. Optional blockchain writes complete before
+local identity state changes; blockchain failures are returned to the caller rather than silently
+being treated as successful local-only mutations.

@@ -14,8 +14,16 @@ import {
   updateIdentityStatus,
   type IdentityStatus,
 } from "../services/identity.service.js";
+import { requireAuthenticatedRequest } from "../middleware/authentication.js";
+import { z } from "zod";
+
+const identityQuerySchema = z.object({
+  search: z.string().trim().max(120).optional(),
+  status: z.enum(["ACTIVE", "REVOKED"]).optional(),
+});
 
 export async function createIdentityController(request: Request, response: Response) {
+  requireAuthenticatedRequest(request);
   const { walletAddress, displayName } = request.body as { walletAddress: string; displayName: string };
   assertIdentityRegistrationAvailable(walletAddress);
   const identityId = randomUUID();
@@ -28,8 +36,9 @@ export async function createIdentityController(request: Request, response: Respo
   return response.status(201).json({ identity, transaction });
 }
 
-export function listIdentitiesController(_request: Request, response: Response) {
-  return response.status(200).json({ identities: listIdentities() });
+export function listIdentitiesController(request: Request, response: Response) {
+  const query = identityQuerySchema.parse(request.query);
+  return response.status(200).json({ identities: listIdentities(query) });
 }
 
 export function getIdentityController(request: Request, response: Response) {
@@ -55,14 +64,22 @@ function getIdentityId(request: Request) {
 }
 
 export async function assignIdentityRoleController(request: Request, response: Response) {
+  const { auth } = requireAuthenticatedRequest(request);
   const identityId = getIdentityId(request);
+  if (identityId === auth.identityId) {
+    throw new AppError("Administrators cannot change their own roles.", 403, "IDENTITY_SELF_ROLE_CHANGE");
+  }
   const { role } = request.body as { role: string };
   const transaction = await submitBlockchainWrite((client) => client.assignRole(identityId, role));
   return response.status(200).json({ identity: assignRole(identityId, role), transaction });
 }
 
 export async function removeIdentityRoleController(request: Request, response: Response) {
+  const { auth } = requireAuthenticatedRequest(request);
   const identityId = getIdentityId(request);
+  if (identityId === auth.identityId) {
+    throw new AppError("Administrators cannot change their own roles.", 403, "IDENTITY_SELF_ROLE_CHANGE");
+  }
   const role = request.body.role as string;
   const transaction = await submitBlockchainWrite((client) => client.removeRole(identityId, role));
   return response.status(200).json({ identity: removeRole(identityId, role), transaction });

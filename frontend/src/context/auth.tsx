@@ -18,6 +18,7 @@ export interface AuthIdentity {
   walletAddress: string;
   displayName: string;
   status?: "ACTIVE" | "REVOKED";
+  permissions?: string[];
 }
 
 export interface AuthSession {
@@ -44,6 +45,7 @@ interface AuthContextValue {
     session: AuthSession,
     roles?: string[],
     deviceId?: string | null,
+    permissions?: string[],
   ) => void;
   setDeviceId: (deviceId: string | null) => void;
   clearSession: (errorMessage?: string | null) => void;
@@ -75,6 +77,7 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
       session: AuthSession,
       roles: string[] = [],
       deviceId: string | null = null,
+      permissions: string[] = [],
     ) => {
       setState({
         status: "authenticated",
@@ -82,7 +85,7 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
         session,
         deviceId,
         roles,
-        permissions: [],
+        permissions,
         errorMessage: null,
       });
     },

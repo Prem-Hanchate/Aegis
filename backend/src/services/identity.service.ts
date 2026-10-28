@@ -55,8 +55,16 @@ export function registerIdentity(walletAddress: string, displayName: string, ide
   return identity;
 }
 
-export function listIdentities() {
-  return [...identities.values()];
+export function listIdentities(filter: { search?: string; status?: IdentityStatus } = {}) {
+  const search = filter.search?.trim().toLowerCase();
+  return [...identities.values()].filter((identity) => {
+    const matchesStatus = !filter.status || identity.status === filter.status;
+    const matchesSearch = !search
+      || identity.displayName.toLowerCase().includes(search)
+      || identity.walletAddress.toLowerCase().includes(search)
+      || identity.roles.some((role) => role.toLowerCase().includes(search));
+    return matchesStatus && matchesSearch;
+  });
 }
 
 export function getIdentity(identityId: string) {

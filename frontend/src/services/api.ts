@@ -156,6 +156,11 @@ export interface ManagedIdentity {
   status: "ACTIVE" | "REVOKED";
   roles: string[];
   createdAt: string;
+  updatedAt?: string;
+}
+
+export function fetchIdentity(accessToken: string, identityId: string): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}`, accessToken);
 }
 
 export interface PolicyMap {
@@ -173,8 +178,15 @@ export interface AuditEvent {
   timestamp: string;
 }
 
-export function fetchIdentities(accessToken: string): Promise<{ identities: ManagedIdentity[] }> {
-  return requestProtectedJson<{ identities: ManagedIdentity[] }>("/identities", accessToken);
+export function fetchIdentities(
+  accessToken: string,
+  filters: { search?: string; status?: "ACTIVE" | "REVOKED" } = {},
+): Promise<{ identities: ManagedIdentity[] }> {
+  const query = new URLSearchParams();
+  if (filters.search) query.set("search", filters.search);
+  if (filters.status) query.set("status", filters.status);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestProtectedJson<{ identities: ManagedIdentity[] }>(`/identities${suffix}`, accessToken);
 }
 
 export function registerIdentity(
@@ -195,6 +207,39 @@ export function updateIdentityStatus(
   return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/status`, accessToken, {
     method: "PATCH",
     body: JSON.stringify({ status }),
+  });
+}
+
+export function updateIdentityProfile(
+  accessToken: string,
+  identityId: string,
+  displayName: string,
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/profile`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ displayName }),
+  });
+}
+
+export function assignIdentityRole(
+  accessToken: string,
+  identityId: string,
+  role: string,
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/roles`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export function removeIdentityRole(
+  accessToken: string,
+  identityId: string,
+  role: string,
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/roles`, accessToken, {
+    method: "DELETE",
+    body: JSON.stringify({ role }),
   });
 }
 

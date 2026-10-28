@@ -4,6 +4,7 @@ import { revokeSession } from "../services/session.service.js";
 import { requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { revokeAllSessionsForIdentity } from "../services/session.service.js";
 import { getIdentity } from "../services/identity.service.js";
+import { getPermissionsForRoles } from "../services/authorization/authorization.service.js";
 
 export function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
@@ -46,7 +47,10 @@ export function currentSessionController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   return response.status(200).json({
     session: auth,
-    identity: getIdentity(auth.identityId),
+    identity: {
+      ...getIdentity(auth.identityId),
+      permissions: getPermissionsForRoles(auth.roles),
+    },
   });
 }
 

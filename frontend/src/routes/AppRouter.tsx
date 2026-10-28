@@ -8,6 +8,7 @@ import { HealthPage } from "../pages/HealthPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { ResourcePage } from "../pages/ResourcePage";
+import { IdentityAdministrationPage } from "../pages/IdentityAdministrationPage";
 
 export function AppRouter() {
   return (
@@ -20,6 +21,7 @@ export function AppRouter() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/devices" element={<DeviceManagementPage />} />
             <Route path="/control-center" element={<ControlCenterPage />} />
+            <Route path="/identities" element={<IdentityAdministrationPage />} />
             <Route path="/resources/:resource" element={<ResourcePage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
