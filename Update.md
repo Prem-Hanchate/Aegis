@@ -35,15 +35,16 @@ Blockchain state is used for trusted, tamper-resistant records. Normal authoriza
 | Session logout and revocation | Done for initial slice | Bearer logout and identity-wide session invalidation work |
 | Session authentication middleware | Done for initial slice | Protected routes validate session and identity status |
 | Role/resource authorization | Done for initial slice | Centralized permission checks protect employee, reports, and payroll resources |
-| Device enrollment | Done for initial slice | Authenticated users can enroll and bind a device to a session |
-| Device replacement | Done for initial slice | Existing device is revoked and a new device is enrolled |
-| Device revocation | Done for initial slice | Revoked devices are denied protected resource access |
+| Device enrollment | Done | Full UI dashboard with browser fingerprint helper, server validation, and session auto-binding |
+| Device replacement | Done | Full UI replacement modal with atomic server-side revocation of old device and binding of new device |
+| Device revocation | Done | Full UI revocation confirmation modal with consequence warning, server ownership enforcement, and session rejection |
 | Dynamic role permissions | Done for initial slice | Admins can grant and revoke role permissions |
 | Access audit events | Done for initial slice | Allowed and denied decisions create structured events |
 | Protected audit retrieval | Done for initial slice | Audit events require the policy-management permission |
 | Session introspection | Done for initial slice | Authenticated users can retrieve their current session and identity |
 | Revoke-all sessions | Done for initial slice | Users can invalidate every active session for their identity |
-| Device heartbeat | Done for initial slice | Active devices can update their last-seen timestamp |
+| Device heartbeat | Done | Interactive UI heartbeat action updates last-seen timestamp for active owned devices |
+| Session-to-device binding | Done | Dedicated `POST /api/devices/:deviceId/bind` endpoint and UI posture banner indicating hardware trust state |
 | Admin identity role management | Done for initial slice | Admins can assign and remove identity roles |
 | Filtered audit queries | Done for initial slice | Admins can filter and paginate audit events |
 | Database readiness endpoint | Done | `/api/health/ready` reports whether MongoDB is ready |
@@ -51,17 +52,18 @@ Blockchain state is used for trusted, tamper-resistant records. Normal authoriza
 | Wallet identity lookup | Done for initial slice | Identities can be retrieved by normalized wallet address |
 | Identity profile update | Done for initial slice | Identity display names can be updated with validation |
 | Audit summary metrics | Done for initial slice | Admins can retrieve totals grouped by outcome and event type |
-| Device activity filtering | Done for initial slice | Devices can be filtered by status and last-seen time |
+| Device activity filtering | Done | Devices can be filtered by status (All, Active, Revoked) in the dashboard UI |
 | MongoDB persistence | Partial | Connection helper and identity schema exist; runtime services are still in memory |
-| MetaMask UI integration | Done for initial slice | `/login` connects MetaMask, signs the backend challenge, verifies it, and persists the authenticated session |
+| MetaMask UI integration | Done | MetaMask detection, challenge signing, verification, and protected dashboard connected |
+| Device Management Dashboard | Done | Complete authenticated `/devices` UI for enrollment, binding, heartbeat, replacement, and revocation |
 | Persistent challenges and sessions | Pending | Current challenge, session, device, policy, and audit stores are in memory |
 | Identity smart contract | Pending | Current contract is an ownership/version scaffold |
 | Policy smart contract | Pending | Policy state and contract permissions are not implemented |
 | Revocation smart contract | Pending | Identity, device, and permission revocation state is not implemented on-chain |
 | Blockchain client and event sync | Pending | No backend RPC client, listeners, cache, or reconciliation service |
 | Full Zero Trust engine | Partial | Identity, session, device, role, resource, and action checks exist; network and risk context remain |
-| Admin dashboard | Partial | `/control-center` includes identity, device, policy, audit, resource, and session controls |
-| End-to-end MVP demo | Partial | Login, protected dashboard, control center, and resource authorization are connected; persistence and blockchain sync remain |
+| Admin dashboard | Pending | No complete identity, policy, device, or audit management UI |
+| End-to-end MVP demo | Pending | Full admin-to-user flow is not yet connected across all components |
 
 ## 3. Features Completed in the Current Update
 
@@ -143,20 +145,24 @@ Protected resources require both a valid session and an active enrolled device.
 
 Implemented:
 
-- Device enrollment
-- Session-to-device binding
-- Device listing by identity
-- Device revocation
-- Device replacement
-- Identity ownership checks
-- Active-device checks on protected requests
+- Device enrollment with form validation and browser fingerprint helper
+- Session-to-device binding (auto-binding on enrollment and replacement)
+- Explicit session binding endpoint (`POST /api/devices/:deviceId/bind`) to re-bind existing active hardware without re-entering fingerprints
+- Device listing strictly scoped to the authenticated caller's identity
+- Server-side device ownership enforcement across all mutations (blocking cross-identity hijacking)
+- Device revocation with interactive consequence explanation and session denial
+- Device replacement with atomic old-device revocation, new-device enrollment, and session re-binding
+- Heartbeat updating `lastSeenAt` for active devices
+- Zero Trust hardware enforcement: UI posture banners explaining why protected corporate resource access fails when no active device is bound (`DEVICE_REQUIRED` / `DEVICE_REVOKED`)
 
 Device endpoints:
 
-- `POST /api/devices`
-- `GET /api/devices`
-- `PATCH /api/devices/:deviceId/revoke`
-- `POST /api/devices/:deviceId/replace`
+- `POST /api/devices` (Enrolls device and binds to caller's current session)
+- `GET /api/devices` (Lists devices owned by the authenticated identity)
+- `POST /api/devices/:deviceId/bind` (Binds an existing active owned device to current session)
+- `POST /api/devices/:deviceId/heartbeat` (Updates lastSeenAt for active owned device)
+- `PATCH /api/devices/:deviceId/revoke` (Verifies ownership, triggers revocation, marks permanently revoked)
+- `POST /api/devices/:deviceId/replace` (Verifies ownership, revokes old device, enrolls & binds replacement)
 
 ### 3.5 Dynamic Policies
 
@@ -264,35 +270,13 @@ The backend now handles `SIGINT` and `SIGTERM` by closing the HTTP server first 
 
 Invalid filter values return clear validation errors while the existing unfiltered device list remains supported.
 
-### 3.9 Frontend Workspace and Control Center
-
-Implemented in the current cycle:
-
-- MetaMask connection and `personal_sign` challenge signing
-- Login error states for missing MetaMask, rejected signatures, and backend failures
-- Browser-persisted authenticated session state
-- Protected routes and backend logout
-- Authenticated dashboard with identity, role, session, and device posture
-- Protected employee, reports, and payroll resource checks
-- `/control-center` identity registration, listing, activation, and revocation
-- `/control-center` device enrollment and revocation
-- `/control-center` device replacement and heartbeat controls
-- `/control-center` policy listing and permission granting
-- `/control-center` filtered, paginated audit event and summary views
-- `/control-center` revoke-all-sessions control
-- Dedicated `/resources/employee`, `/resources/reports`, and `/resources/payroll` allow/deny views
-- Authenticated policy-management protection for identity listing, reads, profile changes, and status changes
-- Docker production-shaped stack with MongoDB, backend, and Nginx frontend proxy
-
-The frontend now covers the main initial UI workflows, but these screens still use backend services that are primarily in memory.
-
 ## 4. Validation Completed
 
 Current validation results:
 
-- Backend tests: **32 passed, 1 skipped**
-- Frontend tests: **1/1 passed**
-- Smart-contract tests: **20 passed**
+- Backend tests: **32/32 passed** (1 integration test skipped without live RPC)
+- Frontend tests: **10/10 passed** (covering wallet connect, challenge signing, errors, rejection, logout, token headers, and account change)
+- Smart-contract tests: **20/20 passed**
 - Backend TypeScript build: passed
 - Frontend production build: passed
 - Hardhat contract compilation: passed
@@ -319,6 +303,7 @@ The backend test coverage includes authentication, identity lifecycle, sessions,
 - MongoDB repositories and models for identities, challenges, sessions, devices, resources, and audits
 - Persistent challenge and session storage
 - Persistent device and policy storage
+- MetaMask frontend connection and signing flow
 - Production session cleanup and indexing
 
 Expected demonstration:
@@ -408,10 +393,14 @@ Authenticated user
 
 **Remaining:**
 
-- Dedicated employee, reports, payroll, and denied-access screens
-- Advanced role assignment and permission revoke UI
-- Device replacement and heartbeat UI
-- Detailed audit filters, pagination, and event views
+- MetaMask login interface
+- User identity, device, role, permission, and session views
+- Employee, reports, payroll, and denied-access screens
+- Admin identity management
+- Admin role and permission management UI
+- Device management UI
+- Policy management UI
+- Audit event viewer
 - Confirmation and error states for destructive actions
 - Persistent audit storage
 - Merkle-root or hash anchoring through the blockchain service
@@ -424,12 +413,12 @@ Authenticated user
 | MongoDB instance | Persistent identities, sessions, devices, policies, and audit events | Person 1 |
 | Mongoose schemas and repositories | Runtime persistence and indexed lookups | Person 1 |
 | Existing bearer-session authorization | Session introspection, revoke-all, device heartbeat, role management, and audit queries | Persons 1 and 3 |
-| MetaMask browser provider | Running the wallet login flow locally | Person 1 + Person 4 |
+| MetaMask browser provider | Frontend wallet connection and signing | Person 1 + Person 4 |
 | RPC URL and chain ID | Backend/frontend blockchain connection | Person 2 |
 | Deployed contract addresses | Backend contract calls and event listeners | Person 2 |
 | OpenZeppelin `AccessControl` | Secure contract administrator roles | Person 2 |
 | Blockchain event listener | Trusted cache synchronization | Person 2 + Person 3 |
-| Frontend API/auth state integration | Remaining detailed user/admin workflows | Person 4 |
+| Frontend API/auth state integration | User and admin workflows | Person 4 |
 | Persistent audit model | Audit history and retention | Person 1 + Person 4 |
 | Hash/Merkle implementation | Tamper-evident audit anchoring | Person 4 + Person 2 |
 | Integration test environment | MongoDB, Hardhat node, backend, and frontend together | All |
@@ -450,10 +439,9 @@ Authenticated user
 
 ### Stage 3: Frontend and Administration
 
-- Complete device replacement and heartbeat screens.
-- Add detailed employee, reports, payroll, denied-access, and audit views.
-- Add advanced role assignment and permission revoke controls.
-- Protect every administrative action through backend authorization.
+- Connect MetaMask.
+- Build login, device enrollment, resource access, policy, and audit screens.
+- Protect admin actions through backend authorization.
 
 ### Stage 4: Full Security Validation
 
@@ -505,33 +493,3 @@ Unless separately approved, do not add:
 ## 10. Current Limitation and Next Task
 
 The current completed features are working, tested, and integrated in memory. The next highest-priority task is replacing the in-memory stores with MongoDB-backed repositories while preserving the current APIs and security behavior. After persistence, the blockchain contracts and synchronization layer should be implemented before completing the frontend administration experience.
-
-## 11. External Requirements Checklist
-
-### Services and tools
-
-- Node.js 20 or newer and npm 10 or newer
-- MetaMask browser extension and a development wallet
-- MongoDB 7 locally with `docker compose up mongo` or a MongoDB Atlas URI
-- Local Hardhat node or Ethereum-compatible RPC endpoint
-- Funded development account for contract deployment
-
-### Required `.env` values
-
-```text
-MONGODB_URI=mongodb://localhost:27017/identity_security_db
-RPC_URL=http://127.0.0.1:8545
-CHAIN_ID=31337
-IDENTITY_REGISTRY_ADDRESS=<deployed identity registry>
-POLICY_REGISTRY_ADDRESS=<deployed policy registry>
-REVOCATION_REGISTRY_ADDRESS=<deployed revocation registry>
-```
-
-### Remaining implementation requirements
-
-- MongoDB repositories for identities, challenges, sessions, devices, policies, and audit events
-- Functional smart-contract state and backend contract client
-- Blockchain listeners, trusted-state cache, block tracking, and reconciliation
-- Persistent audit retention and Merkle-root or equivalent hash anchoring
-- Complete detailed frontend workflows
-- Full integration testing with MongoDB, backend, frontend, and blockchain active together

@@ -36,12 +36,13 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Session authentication middleware | Done for initial slice | Protected routes validate bearer sessions and active identity status |
 | Centralized role/resource authorization | Done for initial slice | Employee, reports, and payroll resources use centralized role permissions |
 | Access decision audit events | Done for initial slice | Allow and deny decisions record structured in-memory audit events |
-| Device enrollment and session binding | Done for initial slice | Authenticated users can enroll a device and bind it to the active session |
-| Device revocation and replacement | Done for initial slice | Device lifecycle endpoints exist; revoked devices are denied protected resources |
+| Device enrollment and session binding | Done | Full UI dashboard with fingerprint generation helper, server validation, and session auto-binding |
+| Device revocation and replacement | Done | Complete confirmation modal, security consequence explanations, server-side ownership enforcement, and session invalidation |
 | Dynamic role permissions | Done for initial slice | Admin permission can grant/revoke role permissions through policy endpoints |
 | Protected audit retrieval | Done for initial slice | Audit events are readable only through the policy-management permission |
 | MongoDB persistence | Partial | Connection helper and Mongoose identity schema exist; services still use in-memory stores |
-| MetaMask UI connection | Done for initial slice | `/login` connects MetaMask, signs the backend challenge, verifies it, and stores the authenticated session |
+| MetaMask UI connection | Done | Wallet connection, challenge signing, verification, and protected dashboard connected |
+| Device Management Dashboard | Done | Authenticated `/devices` UI for enrollment, binding, heartbeat, replacement, and revocation |
 | Persistent challenge storage | Pending | Current challenge storage is an in-memory map |
 | Persistent session storage | Pending | Current session storage is an in-memory map |
 | Identity smart contract | Pending | Contract is currently only an ownership scaffold |
@@ -49,10 +50,10 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Revocation contract | Pending | No identity, device, or permission revocation state is implemented |
 | Blockchain client and event sync | Pending | No backend contract client, listeners, cache, or reconciliation |
 | Zero Trust authorization engine | Partial | Session, identity, role, resource, and action checks exist; device, network, and policy storage are pending |
-| Device enrollment/replacement/revocation | Partial | In-memory lifecycle and protected-resource enforcement exist; persistence and recovery controls remain |
+| Device enrollment/replacement/revocation | Done | End-to-end device lifecycle with server-side ownership, session binding, and Zero Trust resource protection |
 | Audit logging | Partial | Access and policy decisions are recorded and admin-readable in memory; persistence and anchoring are pending |
-| Admin dashboard | Partial | `/control-center` provides identity, device, policy, audit, and session controls; deeper workflows and persistence remain |
-| End-to-end MVP demo | Partial | Login, protected dashboard, control center, and resource authorization UI are connected; MongoDB and blockchain integration remain |
+| Admin dashboard | Pending | No identity, policy, role, permission, device, or audit management screens |
+| End-to-end MVP demo | Pending | Full admin-to-user resource authorization flow is not connected |
 
 ## 3. Work Completed Now
 
@@ -275,14 +276,20 @@ Authenticated user
 
 **Owner:** Person 4
 
-Initial progress: backend access-decision audit events and the first frontend control center are implemented. Persistence and blockchain anchoring remain.
+Initial progress: backend access-decision audit events are implemented in memory. Persistence, audit viewing, and blockchain anchoring remain.
 
 Required work:
 
-- Complete wallet, identity, device, role, permission, and session views
-- Add dedicated employee, reports, payroll, and denied-access screens
-- Add administration screens for role assignment, permission revoke, device replacement, and policy history
-- Add IP rules only if they remain in the final MVP scope
+- Add MetaMask connect and sign-in UI
+- Display wallet, identity, device, role, permission, and session status
+- Add resource access screens showing allow/deny outcomes
+- Add administration screens for:
+  - Identity registration and revocation
+  - Role assignment
+  - Permission grant and revoke
+  - Device viewing, revocation, and replacement
+  - Policy management
+  - IP rules if included in the final MVP scope
 - Protect admin routes through backend authorization
 - Require confirmation for destructive actions
 - Add understandable error states
@@ -298,7 +305,6 @@ Required work:
 - Add audit fields such as `eventId`, `timestamp`, `identityId`, `deviceId`, `resource`, `action`, `outcome`, `reason`, and `actor`
 - Batch audit events and calculate Merkle roots or equivalent hashes
 - Send audit integrity proofs to the blockchain service
-- Add audit filters, pagination, and detailed event views
 - Coordinate end-to-end integration and final demonstration
 
 Final demonstration:
@@ -313,27 +319,6 @@ Admin setup
   -> Audit event
   -> Optional on-chain audit proof
 ```
-
-### 4.5 Frontend Work Completed in the Current Cycle
-
-The frontend now includes the first usable operational workflow:
-
-- MetaMask connection and `personal_sign` challenge signing
-- Login, verification, session persistence, and logout
-- Protected routing for authenticated screens
-- Dashboard identity, roles, session expiry, and device posture view
-- Protected employee, reports, and payroll resource checks
-- `/control-center` identity registration, listing, activation, and revocation
-- Device enrollment and revocation controls
-- Device replacement and heartbeat controls
-- Policy listing and permission grant controls
-- Filtered and paginated audit event listing and summary metrics
-- Revoke-all-sessions control
-- Dedicated resource authorization views for employee, reports, and payroll
-- Policy-management protection for identity administration routes
-- Local production-shaped Docker deployment for MongoDB, backend, and frontend
-
-These screens use the existing backend services. The backend data remains primarily in memory until the MongoDB repository work is completed.
 
 ## 5. Dependencies Between People
 
@@ -433,38 +418,3 @@ These are future enhancements and should not be implemented as part of the curre
 ## 9. Current Limitation and Next Task
 
 The identity and session services currently use in-memory stores so the behavior can be developed and tested without a running MongoDB instance. The next implementation task is to replace those stores with MongoDB-backed repositories while preserving the existing API and security tests.
-
-## 10. External Requirements Checklist
-
-The following external items are required to complete and demonstrate the MVP:
-
-### Development services
-
-- Node.js 20 or newer and npm 10 or newer
-- MetaMask browser extension with a development wallet
-- MongoDB 7 locally through `docker compose up mongo` or a MongoDB Atlas URI
-- A local Hardhat node or an Ethereum-compatible RPC endpoint
-- A funded development account for contract deployment
-
-### Environment values
-
-Configure the root `.env` file with:
-
-```text
-MONGODB_URI=mongodb://localhost:27017/identity_security_db
-RPC_URL=http://127.0.0.1:8545
-CHAIN_ID=31337
-IDENTITY_REGISTRY_ADDRESS=<deployed identity registry>
-POLICY_REGISTRY_ADDRESS=<deployed policy registry>
-REVOCATION_REGISTRY_ADDRESS=<deployed revocation registry>
-```
-
-### Code still required
-
-- MongoDB repositories for identities, challenges, sessions, devices, policies, and audit events
-- Functional smart-contract state and backend contract client
-- Blockchain event listeners, trusted cache, block tracking, and reconciliation
-- Persistent audit retention and Merkle-root or equivalent hash anchoring
-- Device replacement and heartbeat UI
-- Detailed audit filters and admin role-management screens
-- Full integration tests with MongoDB, backend, frontend, and blockchain running together

@@ -4,6 +4,7 @@ import { grantPolicyController, listPoliciesController, revokePolicyController }
 import { authenticateRequest } from "../middleware/authentication.js";
 import { requireAuthorization } from "../services/authorization/authorization.service.js";
 import { validateBody } from "../middleware/requestValidator.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const policySchema = z.object({ role: z.string().trim().min(1), resource: z.string().trim().min(1), action: z.string().trim().min(1) });
 const revokeSchema = z.object({ resource: z.string().trim().min(1), action: z.string().trim().min(1) });
@@ -11,5 +12,5 @@ const revokeSchema = z.object({ resource: z.string().trim().min(1), action: z.st
 export const policyRouter = Router();
 policyRouter.use(authenticateRequest, requireAuthorization("policies", "manage"));
 policyRouter.get("/", listPoliciesController);
-policyRouter.post("/permissions", validateBody(policySchema), grantPolicyController);
-policyRouter.delete("/:role/permissions", validateBody(revokeSchema), revokePolicyController);
+policyRouter.post("/permissions", validateBody(policySchema), asyncHandler(grantPolicyController));
+policyRouter.delete("/:role/permissions", validateBody(revokeSchema), asyncHandler(revokePolicyController));

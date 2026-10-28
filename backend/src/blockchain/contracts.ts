@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Contract } from "ethers";
-import type { JsonRpcProvider } from "ethers";
+import type { ContractRunner } from "ethers";
 import type { BlockchainConfig } from "./config.js";
 
 export interface HardhatArtifact {
@@ -17,7 +17,7 @@ export function loadArtifact(contractName: string): HardhatArtifact {
   return JSON.parse(readFileSync(fileURLToPath(artifactUrl), "utf8")) as HardhatArtifact;
 }
 
-export function createBlockchainContracts(provider: JsonRpcProvider, config: BlockchainConfig) {
+export function createBlockchainContracts(provider: ContractRunner, config: BlockchainConfig) {
   return {
     identityRegistry: new Contract(
       config.identityRegistryAddress,

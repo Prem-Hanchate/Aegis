@@ -13,6 +13,7 @@ import {
 import { validateBody } from "../middleware/requestValidator.js";
 import { authenticateRequest } from "../middleware/authentication.js";
 import { requireAuthorization } from "../services/authorization/authorization.service.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 
 const createIdentitySchema = z.object({
   walletAddress: z.string().min(1),
@@ -27,7 +28,7 @@ const profileSchema = z.object({ displayName: z.string().trim().min(1).max(120) 
 
 export const identityRouter = Router();
 
-identityRouter.post("/", validateBody(createIdentitySchema), createIdentityController);
+identityRouter.post("/", validateBody(createIdentitySchema), asyncHandler(createIdentityController));
 identityRouter.get("/", authenticateRequest, requireAuthorization("policies", "manage"), listIdentitiesController);
 identityRouter.get("/wallet/:walletAddress", getIdentityByWalletController);
 identityRouter.get("/:identityId", authenticateRequest, requireAuthorization("policies", "manage"), getIdentityController);
@@ -43,19 +44,19 @@ identityRouter.patch(
   authenticateRequest,
   requireAuthorization("policies", "manage"),
   validateBody(updateIdentityStatusSchema),
-  updateIdentityStatusController,
+  asyncHandler(updateIdentityStatusController),
 );
 identityRouter.patch(
   "/:identityId/roles",
   authenticateRequest,
   requireAuthorization("policies", "manage"),
   validateBody(roleSchema),
-  assignIdentityRoleController,
+  asyncHandler(assignIdentityRoleController),
 );
 identityRouter.delete(
   "/:identityId/roles",
   authenticateRequest,
   requireAuthorization("policies", "manage"),
   validateBody(roleSchema),
-  removeIdentityRoleController,
+  asyncHandler(removeIdentityRoleController),
 );
