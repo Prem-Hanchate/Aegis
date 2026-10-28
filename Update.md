@@ -35,15 +35,16 @@ Blockchain state is used for trusted, tamper-resistant records. Normal authoriza
 | Session logout and revocation | Done for initial slice | Bearer logout and identity-wide session invalidation work |
 | Session authentication middleware | Done for initial slice | Protected routes validate session and identity status |
 | Role/resource authorization | Done for initial slice | Centralized permission checks protect employee, reports, and payroll resources |
-| Device enrollment | Done for initial slice | Authenticated users can enroll and bind a device to a session |
-| Device replacement | Done for initial slice | Existing device is revoked and a new device is enrolled |
-| Device revocation | Done for initial slice | Revoked devices are denied protected resource access |
+| Device enrollment | Done | Full UI dashboard with browser fingerprint helper, server validation, and session auto-binding |
+| Device replacement | Done | Full UI replacement modal with atomic server-side revocation of old device and binding of new device |
+| Device revocation | Done | Full UI revocation confirmation modal with consequence warning, server ownership enforcement, and session rejection |
 | Dynamic role permissions | Done for initial slice | Admins can grant and revoke role permissions |
 | Access audit events | Done for initial slice | Allowed and denied decisions create structured events |
 | Protected audit retrieval | Done for initial slice | Audit events require the policy-management permission |
 | Session introspection | Done for initial slice | Authenticated users can retrieve their current session and identity |
 | Revoke-all sessions | Done for initial slice | Users can invalidate every active session for their identity |
-| Device heartbeat | Done for initial slice | Active devices can update their last-seen timestamp |
+| Device heartbeat | Done | Interactive UI heartbeat action updates last-seen timestamp for active owned devices |
+| Session-to-device binding | Done | Dedicated `POST /api/devices/:deviceId/bind` endpoint and UI posture banner indicating hardware trust state |
 | Admin identity role management | Done for initial slice | Admins can assign and remove identity roles |
 | Filtered audit queries | Done for initial slice | Admins can filter and paginate audit events |
 | Database readiness endpoint | Done | `/api/health/ready` reports whether MongoDB is ready |
@@ -51,9 +52,10 @@ Blockchain state is used for trusted, tamper-resistant records. Normal authoriza
 | Wallet identity lookup | Done for initial slice | Identities can be retrieved by normalized wallet address |
 | Identity profile update | Done for initial slice | Identity display names can be updated with validation |
 | Audit summary metrics | Done for initial slice | Admins can retrieve totals grouped by outcome and event type |
-| Device activity filtering | Done for initial slice | Devices can be filtered by status and last-seen time |
+| Device activity filtering | Done | Devices can be filtered by status (All, Active, Revoked) in the dashboard UI |
 | MongoDB persistence | Partial | Connection helper and identity schema exist; runtime services are still in memory |
 | MetaMask UI integration | Done | MetaMask detection, challenge signing, verification, and protected dashboard connected |
+| Device Management Dashboard | Done | Complete authenticated `/devices` UI for enrollment, binding, heartbeat, replacement, and revocation |
 | Persistent challenges and sessions | Pending | Current challenge, session, device, policy, and audit stores are in memory |
 | Identity smart contract | Pending | Current contract is an ownership/version scaffold |
 | Policy smart contract | Pending | Policy state and contract permissions are not implemented |
@@ -143,20 +145,24 @@ Protected resources require both a valid session and an active enrolled device.
 
 Implemented:
 
-- Device enrollment
-- Session-to-device binding
-- Device listing by identity
-- Device revocation
-- Device replacement
-- Identity ownership checks
-- Active-device checks on protected requests
+- Device enrollment with form validation and browser fingerprint helper
+- Session-to-device binding (auto-binding on enrollment and replacement)
+- Explicit session binding endpoint (`POST /api/devices/:deviceId/bind`) to re-bind existing active hardware without re-entering fingerprints
+- Device listing strictly scoped to the authenticated caller's identity
+- Server-side device ownership enforcement across all mutations (blocking cross-identity hijacking)
+- Device revocation with interactive consequence explanation and session denial
+- Device replacement with atomic old-device revocation, new-device enrollment, and session re-binding
+- Heartbeat updating `lastSeenAt` for active devices
+- Zero Trust hardware enforcement: UI posture banners explaining why protected corporate resource access fails when no active device is bound (`DEVICE_REQUIRED` / `DEVICE_REVOKED`)
 
 Device endpoints:
 
-- `POST /api/devices`
-- `GET /api/devices`
-- `PATCH /api/devices/:deviceId/revoke`
-- `POST /api/devices/:deviceId/replace`
+- `POST /api/devices` (Enrolls device and binds to caller's current session)
+- `GET /api/devices` (Lists devices owned by the authenticated identity)
+- `POST /api/devices/:deviceId/bind` (Binds an existing active owned device to current session)
+- `POST /api/devices/:deviceId/heartbeat` (Updates lastSeenAt for active owned device)
+- `PATCH /api/devices/:deviceId/revoke` (Verifies ownership, triggers revocation, marks permanently revoked)
+- `POST /api/devices/:deviceId/replace` (Verifies ownership, revokes old device, enrolls & binds replacement)
 
 ### 3.5 Dynamic Policies
 

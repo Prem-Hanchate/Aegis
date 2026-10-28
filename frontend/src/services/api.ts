@@ -71,15 +71,24 @@ export function fetchResource(
 
 export interface DeviceSummary {
   deviceId: string;
+  identityId: string;
   name: string;
   fingerprint: string;
   status: "ACTIVE" | "REVOKED";
   createdAt: string;
   lastSeenAt: string;
+  revokedAt?: string | null;
 }
 
-export function fetchDevices(accessToken: string): Promise<{ devices: DeviceSummary[] }> {
-  return requestProtectedJson<{ devices: DeviceSummary[] }>("/devices", accessToken);
+export function fetchDevices(
+  accessToken: string,
+  filters: { status?: "ACTIVE" | "REVOKED"; seenSince?: string } = {},
+): Promise<{ devices: DeviceSummary[] }> {
+  const query = new URLSearchParams();
+  if (filters.status) query.set("status", filters.status);
+  if (filters.seenSince) query.set("seenSince", filters.seenSince);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  return requestProtectedJson<{ devices: DeviceSummary[] }>(`/devices${queryString}`, accessToken);
 }
 
 export function enrollDevice(
@@ -90,4 +99,52 @@ export function enrollDevice(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function revokeDevice(
+  accessToken: string,
+  deviceId: string,
+): Promise<{ device: DeviceSummary; transaction?: unknown }> {
+  return requestProtectedJson<{ device: DeviceSummary; transaction?: unknown }>(
+    `/devices/${deviceId}/revoke`,
+    accessToken,
+    { method: "PATCH" },
+  );
+}
+
+export function replaceDevice(
+  accessToken: string,
+  deviceId: string,
+  payload: { name: string; fingerprint: string },
+): Promise<{ device: DeviceSummary; transaction?: unknown }> {
+  return requestProtectedJson<{ device: DeviceSummary; transaction?: unknown }>(
+    `/devices/${deviceId}/replace`,
+    accessToken,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function heartbeatDevice(
+  accessToken: string,
+  deviceId: string,
+): Promise<{ device: DeviceSummary }> {
+  return requestProtectedJson<{ device: DeviceSummary }>(
+    `/devices/${deviceId}/heartbeat`,
+    accessToken,
+    { method: "POST" },
+  );
+}
+
+export function bindDevice(
+  accessToken: string,
+  deviceId: string,
+): Promise<{ device: DeviceSummary; message: string }> {
+  return requestProtectedJson<{ device: DeviceSummary; message: string }>(
+    `/devices/${deviceId}/bind`,
+    accessToken,
+    { method: "POST" },
+  );
 }

@@ -83,14 +83,44 @@ npm run build
 
 ---
 
+## Phase 2 Implementation: Device Management Dashboard & Zero Trust Hardware Posture
+
+### Device Management Lifecycle (`/devices`)
+
+1. **Zero Trust Hardware Boundary**: In Aegis Zero Trust, wallet identity authentication alone is insufficient. Accessing protected corporate endpoints (`/api/resources/employee`, `/reports`, `/payroll`) strictly mandates an active, registered device bound to the current session (`auth.deviceId`).
+2. **Device Inventory & Status Filters**: Authenticated users can inspect their hardware inventory, filtering by `All`, `Active`, or `Revoked` status. Meaningful details including the device identifier, hardware fingerprint, enrollment date, and last seen timestamp are displayed.
+3. **Session-to-Device Binding**:
+   - Newly enrolled devices and replacement devices are automatically bound to the active session.
+   - For existing active devices, users can explicitly bind hardware to their current session via `POST /api/devices/:deviceId/bind`.
+   - The UI features a dynamic Session Posture Banner highlighting whether the session is **Bound & Active** or in **No Active Device Bound** warning posture.
+4. **Device Enrollment**: Authenticated users register new hardware using the enrollment form, with input validation and a client-side browser fingerprint generator.
+5. **Device Replacement**: Allows seamlessly rotating hardware. The user specifies replacement credentials in a modal; the backend atomically revokes the old device on-chain/in-memory, registers the new device, and binds it to the current session.
+6. **Device Revocation**: Includes a confirmation dialog explicitly detailing the security consequences: immediate and permanent `REVOKED` status, revocation on blockchain, and rejection of all sessions bound to that device with `DEVICE_REVOKED` (403).
+7. **Heartbeat Monitoring**: Active devices can dispatch heartbeats (`POST /api/devices/:deviceId/heartbeat`) to update their `lastSeenAt` telemetry.
+8. **Server-Side Security Enforcement**:
+   - Device ownership is strictly validated server-side for all endpoints (`bind`, `revoke`, `replace`, `heartbeat`). A caller cannot hijack or revoke another identity's device by changing an identifier (rejected with `DEVICE_IDENTITY_MISMATCH` / 403).
+   - Only active, unrevoked devices owned by the caller can be bound to a session (`DEVICE_REVOKED` / 400).
+   - Revocation verifies device ownership and active status *before* initiating blockchain writes, preventing unauthorized gas expenditures or falsified revocation records.
+
+---
+
 ## Zero Trust Evaluation & Endpoints
 
 - **Public Gateways**:
   - `GET /api/health`: Operational backend diagnostics
   - `POST /api/auth/challenge`: Nonce challenge generation
   - `POST /api/auth/verify`: Cryptographic verification and session issuance
-- **Authenticated Endpoints**:
+- **Authenticated Identity & Session Endpoints**:
   - `POST /api/auth/logout`: Revokes active bearer session
   - `GET /api/auth/me`: Session and identity introspection
-  - `GET /api/resources/:resource`: Policy-evaluated resource access (`employee`, `reports`, `payroll`)
-  - `GET /api/devices`: Enrolled device posture
+  - `POST /api/auth/sessions/revoke-all`: Emergency invalidation of all sessions for identity
+- **Zero Trust Device Management Endpoints**:
+  - `GET /api/devices`: Lists enrolled hardware belonging to the caller's identity
+  - `POST /api/devices`: Enrolls a new device and auto-binds to current session
+  - `POST /api/devices/:deviceId/bind`: Binds an existing active device to current session
+  - `POST /api/devices/:deviceId/heartbeat`: Updates device last-seen timestamp
+  - `POST /api/devices/:deviceId/replace`: Replaces an old device with a new one
+  - `PATCH /api/devices/:deviceId/revoke`: Permanently revokes a device
+- **Protected Resources**:
+  - `GET /api/resources/:resource`: Policy-evaluated resource access (`employee`, `reports`, `payroll`), requiring both valid role permissions and an active bound device.
+

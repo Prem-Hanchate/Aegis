@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { DashboardPage } from "../pages/DashboardPage";
+import { DeviceManagementPage } from "../pages/DeviceManagementPage";
 import { HealthPage } from "../pages/HealthPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
@@ -15,6 +16,7 @@ export function AppRouter() {
           <Route path="/health" element={<HealthPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/devices" element={<DeviceManagementPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

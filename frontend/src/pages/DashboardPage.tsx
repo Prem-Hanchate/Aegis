@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuthState } from "../context/auth";
 import {
   fetchBackendHealth,
@@ -182,7 +183,24 @@ export function DashboardPage() {
               {deviceLoading ? "Checking..." : `${activeDeviceCount} active`}
             </strong>
           </li>
+          <li>
+            <span>Bound Hardware</span>
+            <strong>
+              {state.deviceId ? (
+                <span className="success-text" title={state.deviceId}>
+                  {state.deviceId.slice(0, 8)}... (Bound)
+                </span>
+              ) : (
+                <span className="error-text">None (Unbound)</span>
+              )}
+            </strong>
+          </li>
         </ul>
+        <div style={{ marginTop: "16px" }}>
+          <Link to="/devices" className="button-link" style={{ width: "100%", justifyContent: "center" }}>
+            Manage Devices & Hardware →
+          </Link>
+        </div>
       </div>
 
       {/* Real Resource Access Evaluation */}

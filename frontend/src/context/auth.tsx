@@ -45,6 +45,7 @@ interface AuthContextValue {
     roles?: string[],
     deviceId?: string | null,
   ) => void;
+  setDeviceId: (deviceId: string | null) => void;
   clearSession: (errorMessage?: string | null) => void;
   setError: (errorMessage: string) => void;
   setLoading: (loading: boolean) => void;
@@ -150,17 +151,25 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
     };
   }, [state.status, state.identity?.walletAddress, clearSession]);
 
+  const setDeviceId = useCallback((deviceId: string | null) => {
+    setState((current) => ({
+      ...current,
+      deviceId,
+    }));
+  }, []);
+
   const value = useMemo(
     () => ({
       state,
       setState,
       setSession,
+      setDeviceId,
       clearSession,
       setError,
       setLoading,
       logout,
     }),
-    [state, setSession, clearSession, setError, setLoading, logout],
+    [state, setSession, setDeviceId, clearSession, setError, setLoading, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

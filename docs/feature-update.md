@@ -36,12 +36,13 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Session authentication middleware | Done for initial slice | Protected routes validate bearer sessions and active identity status |
 | Centralized role/resource authorization | Done for initial slice | Employee, reports, and payroll resources use centralized role permissions |
 | Access decision audit events | Done for initial slice | Allow and deny decisions record structured in-memory audit events |
-| Device enrollment and session binding | Done for initial slice | Authenticated users can enroll a device and bind it to the active session |
-| Device revocation and replacement | Done for initial slice | Device lifecycle endpoints exist; revoked devices are denied protected resources |
+| Device enrollment and session binding | Done | Full UI dashboard with fingerprint generation helper, server validation, and session auto-binding |
+| Device revocation and replacement | Done | Complete confirmation modal, security consequence explanations, server-side ownership enforcement, and session invalidation |
 | Dynamic role permissions | Done for initial slice | Admin permission can grant/revoke role permissions through policy endpoints |
 | Protected audit retrieval | Done for initial slice | Audit events are readable only through the policy-management permission |
 | MongoDB persistence | Partial | Connection helper and Mongoose identity schema exist; services still use in-memory stores |
 | MetaMask UI connection | Done | Wallet connection, challenge signing, verification, and protected dashboard connected |
+| Device Management Dashboard | Done | Authenticated `/devices` UI for enrollment, binding, heartbeat, replacement, and revocation |
 | Persistent challenge storage | Pending | Current challenge storage is an in-memory map |
 | Persistent session storage | Pending | Current session storage is an in-memory map |
 | Identity smart contract | Pending | Contract is currently only an ownership scaffold |
@@ -49,7 +50,7 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Revocation contract | Pending | No identity, device, or permission revocation state is implemented |
 | Blockchain client and event sync | Pending | No backend contract client, listeners, cache, or reconciliation |
 | Zero Trust authorization engine | Partial | Session, identity, role, resource, and action checks exist; device, network, and policy storage are pending |
-| Device enrollment/replacement/revocation | Partial | In-memory lifecycle and protected-resource enforcement exist; persistence and recovery controls remain |
+| Device enrollment/replacement/revocation | Done | End-to-end device lifecycle with server-side ownership, session binding, and Zero Trust resource protection |
 | Audit logging | Partial | Access and policy decisions are recorded and admin-readable in memory; persistence and anchoring are pending |
 | Admin dashboard | Pending | No identity, policy, role, permission, device, or audit management screens |
 | End-to-end MVP demo | Pending | Full admin-to-user resource authorization flow is not connected |
