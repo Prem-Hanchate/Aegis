@@ -53,7 +53,7 @@ Blockchain state is used for trusted, tamper-resistant records. Normal authoriza
 | Audit summary metrics | Done for initial slice | Admins can retrieve totals grouped by outcome and event type |
 | Device activity filtering | Done for initial slice | Devices can be filtered by status and last-seen time |
 | MongoDB persistence | Partial | Connection helper and identity schema exist; runtime services are still in memory |
-| MetaMask UI integration | Pending | Backend signing flow exists; frontend wallet UI is not connected |
+| MetaMask UI integration | Done | MetaMask detection, challenge signing, verification, and protected dashboard connected |
 | Persistent challenges and sessions | Pending | Current challenge, session, device, policy, and audit stores are in memory |
 | Identity smart contract | Pending | Current contract is an ownership/version scaffold |
 | Policy smart contract | Pending | Policy state and contract permissions are not implemented |
@@ -268,9 +268,9 @@ Invalid filter values return clear validation errors while the existing unfilter
 
 Current validation results:
 
-- Backend tests: **28/28 passed**
-- Frontend tests: **1/1 passed**
-- Smart-contract tests: **1/1 passed**
+- Backend tests: **32/32 passed** (1 integration test skipped without live RPC)
+- Frontend tests: **10/10 passed** (covering wallet connect, challenge signing, errors, rejection, logout, token headers, and account change)
+- Smart-contract tests: **20/20 passed**
 - Backend TypeScript build: passed
 - Frontend production build: passed
 - Hardhat contract compilation: passed

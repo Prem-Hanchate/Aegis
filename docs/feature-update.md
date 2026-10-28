@@ -41,7 +41,7 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Dynamic role permissions | Done for initial slice | Admin permission can grant/revoke role permissions through policy endpoints |
 | Protected audit retrieval | Done for initial slice | Audit events are readable only through the policy-management permission |
 | MongoDB persistence | Partial | Connection helper and Mongoose identity schema exist; services still use in-memory stores |
-| MetaMask UI connection | Pending | Frontend auth methods exist, but wallet connection and signing UI are not wired |
+| MetaMask UI connection | Done | Wallet connection, challenge signing, verification, and protected dashboard connected |
 | Persistent challenge storage | Pending | Current challenge storage is an in-memory map |
 | Persistent session storage | Pending | Current session storage is an in-memory map |
 | Identity smart contract | Pending | Contract is currently only an ownership scaffold |

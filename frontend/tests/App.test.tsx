@@ -13,12 +13,13 @@ const healthResponse = {
   },
 };
 
-describe("App", () => {
+describe("App Route & Gateway Protection", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
+        status: 200,
         json: async () => healthResponse,
       }),
     );
@@ -28,10 +29,19 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the dashboard and loads backend health", async () => {
+  it("renders the wallet authentication gateway for unauthenticated visitors", () => {
     render(<App />);
 
-    expect(screen.getByText(/Decentralized Identity/i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText(/Service: aegis-backend/i)).toBeInTheDocument());
+    expect(screen.getByText(/Wallet Authentication/i)).toBeInTheDocument();
+    expect(screen.getByText(/Verifiable Access. Edge Secured./i)).toBeInTheDocument();
+  });
+
+  it("detects when MetaMask is not installed and shows provider warning", () => {
+    // window.ethereum is undefined
+    render(<App />);
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(/MetaMask Not Detected/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Install MetaMask/i })).toBeInTheDocument();
   });
 });
