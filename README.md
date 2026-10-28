@@ -137,3 +137,18 @@ wallet lookup are not public endpoints; ordinary users cannot use them or change
 cannot change their own roles, preventing self-escalation. Optional blockchain writes complete before
 local identity state changes; blockchain failures are returned to the caller rather than silently
 being treated as successful local-only mutations.
+
+## Policy Management and Protected Resources
+
+The `/policies` screen shows the live permission map for the supported `employee`, `manager`, and
+`admin` roles. Users need the effective `policies:manage` permission to view or mutate policies.
+Granting or revoking a permission explains that the change affects every identity with the role;
+revocation requires an explicit confirmation. Policy responses include an optional blockchain
+transaction result when blockchain administration is configured.
+
+The Employee, Reports, and Payroll navigation links are shown according to the current effective
+permissions, but every resource request is still authorized by the backend using the active
+identity, session, enrolled device, role, permission, resource, and action. The resource screens
+display the real API response and distinguish backend authorization failures from network failures.
+Policy changes are evaluated on every request, so revocations take effect without waiting for a
+stale permission snapshot.

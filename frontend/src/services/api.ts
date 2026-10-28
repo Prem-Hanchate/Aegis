@@ -59,6 +59,7 @@ export function fetchBackendHealth(): Promise<BackendHealthResponse> {
 
 export interface ResourceAccessResponse {
   resource: string;
+  identityId: string;
   data: string;
 }
 
@@ -250,11 +251,26 @@ export function fetchPolicies(accessToken: string): Promise<{ policies: PolicyMa
 export function grantPolicy(
   accessToken: string,
   payload: { role: string; resource: string; action: string },
-): Promise<unknown> {
-  return requestProtectedJson("/policies/permissions", accessToken, {
+): Promise<{ policy: { role: string; permissions: string[] }; transaction?: unknown }> {
+  return requestProtectedJson<{ policy: { role: string; permissions: string[] }; transaction?: unknown }>("/policies/permissions", accessToken, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function revokePolicy(
+  accessToken: string,
+  role: string,
+  payload: { resource: string; action: string },
+): Promise<{ policy: { role: string; permissions: string[] }; transaction?: unknown }> {
+  return requestProtectedJson<{ policy: { role: string; permissions: string[] }; transaction?: unknown }>(
+    `/policies/${encodeURIComponent(role)}/permissions`,
+    accessToken,
+    {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function fetchAudit(

@@ -3,11 +3,36 @@ import type { RequestHandler } from "express";
 import { getIdentity } from "../identity.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
 
+const defaultRolePermissions: Record<string, string[]> = {
+  employee: ["employee:read", "reports:read"],
+  manager: ["employee:read", "reports:read", "payroll:read"],
+  admin: ["employee:read", "reports:read", "payroll:read", "policies:manage"],
+};
+
 const rolePermissions: Record<string, Set<string>> = {
   employee: new Set(["employee:read", "reports:read"]),
   manager: new Set(["employee:read", "reports:read", "payroll:read"]),
   admin: new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]),
 };
+
+const supportedPermissions = new Set([
+  "employee:read",
+  "reports:read",
+  "payroll:read",
+  "policies:manage",
+]);
+
+export function assertSupportedPolicy(role: string, resource: string, action: string) {
+  const normalizedRole = role.trim();
+  const permission = `${resource.trim()}:${action.trim()}`;
+  if (!Object.hasOwn(defaultRolePermissions, normalizedRole)) {
+    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
+  }
+  if (!supportedPermissions.has(permission)) {
+    throw new AppError("Permission is not supported.", 400, "POLICY_PERMISSION_NOT_SUPPORTED");
+  }
+  return { role: normalizedRole, permission };
+}
 
 export function getPermissionsForRoles(roles: string[]) {
   return [...new Set(roles.flatMap((role) => [...(rolePermissions[role] ?? [])]))];
@@ -63,12 +88,12 @@ interface RequestWithAuth {
 }
 
 export function clearAuthorizationState() {
-  for (const permissions of Object.values(rolePermissions)) {
-    permissions.clear();
+  for (const role of Object.keys(rolePermissions)) {
+    delete rolePermissions[role];
   }
-  rolePermissions.employee = new Set(["employee:read", "reports:read"]);
-  rolePermissions.manager = new Set(["employee:read", "reports:read", "payroll:read"]);
-  rolePermissions.admin = new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]);
+  for (const [role, permissions] of Object.entries(defaultRolePermissions)) {
+    rolePermissions[role] = new Set(permissions);
+  }
 }
 
 export function listRolePermissions() {
@@ -76,21 +101,21 @@ export function listRolePermissions() {
 }
 
 export function grantRolePermission(role: string, resource: string, action: string) {
-  const normalizedRole = role.trim();
-  const permission = `${resource.trim()}:${action.trim()}`;
-  if (!normalizedRole || permission === ":") {
-    throw new AppError("Role, resource, and action are required.", 400, "POLICY_INVALID_INPUT");
-  }
-  rolePermissions[normalizedRole] ??= new Set();
-  rolePermissions[normalizedRole].add(permission);
-  return { role: normalizedRole, permissions: [...rolePermissions[normalizedRole]] };
-}
-
-export function revokeRolePermission(role: string, resource: string, action: string) {
-  const permissions = rolePermissions[role];
+  const { role: normalizedRole, permission } = assertSupportedPolicy(role, resource, action);
+  const permissions = rolePermissions[normalizedRole];
   if (!permissions) {
     throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
   }
-  permissions.delete(`${resource}:${action}`);
-  return { role, permissions: [...permissions] };
+  permissions.add(permission);
+  return { role: normalizedRole, permissions: [...permissions] };
+}
+
+export function revokeRolePermission(role: string, resource: string, action: string) {
+  const { role: normalizedRole, permission } = assertSupportedPolicy(role, resource, action);
+  const permissions = rolePermissions[normalizedRole];
+  if (!permissions) {
+    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
+  }
+  permissions.delete(permission);
+  return { role: normalizedRole, permissions: [...permissions] };
 }

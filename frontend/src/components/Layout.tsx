@@ -39,10 +39,22 @@ export function Layout() {
                 <NavLink to="/identities" className={navLinkClassName}>
                   Identities
                 </NavLink>
+                <NavLink to="/policies" className={navLinkClassName}>
+                  Policies
+                </NavLink>
                 <NavLink to="/control-center" className={navLinkClassName}>
                   Control center
                 </NavLink>
               </>
+            ) : null}
+            {state.permissions.includes("employee:read") ? (
+              <NavLink to="/resources/employee" className={navLinkClassName}>Employee</NavLink>
+            ) : null}
+            {state.permissions.includes("reports:read") ? (
+              <NavLink to="/resources/reports" className={navLinkClassName}>Reports</NavLink>
+            ) : null}
+            {state.permissions.includes("payroll:read") ? (
+              <NavLink to="/resources/payroll" className={navLinkClassName}>Payroll</NavLink>
             ) : null}
             <NavLink to="/health" className={navLinkClassName}>
               Health

@@ -62,12 +62,64 @@ describe("device, policy, and audit features", () => {
     const adminToken = await loginWithRole(app, "admin");
 
     const grantResponse = await request(app).post("/api/policies/permissions").set("Authorization", `Bearer ${adminToken}`).send({
-      role: "contractor",
-      resource: "reports",
+      role: "employee",
+      resource: "payroll",
       action: "read",
     });
     expect(grantResponse.status).toBe(201);
-    expect(grantResponse.body.policy.permissions).toContain("reports:read");
+    expect(grantResponse.body.policy.permissions).toContain("payroll:read");
+  });
+
+  it("applies permission revocation to existing sessions immediately", async () => {
+    const app = createApp();
+    const adminToken = await loginWithRole(app, "admin");
+    await request(app).post("/api/policies/permissions").set("Authorization", `Bearer ${adminToken}`)
+      .send({ role: "employee", resource: "payroll", action: "read" });
+    const employeeToken = await loginWithRole(app, "employee");
+
+    const allowedResponse = await request(app)
+      .get("/api/resources/payroll")
+      .set("Authorization", `Bearer ${employeeToken}`);
+    expect(allowedResponse.status).toBe(200);
+
+    const revokeResponse = await request(app)
+      .delete("/api/policies/employee/permissions")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ resource: "payroll", action: "read" });
+    expect(revokeResponse.status).toBe(200);
+
+    const deniedResponse = await request(app)
+      .get("/api/resources/payroll")
+      .set("Authorization", `Bearer ${employeeToken}`);
+    expect(deniedResponse.status).toBe(403);
+    expect(deniedResponse.body.error.code).toBe("AUTHORIZATION_DENIED");
+  });
+
+  it("rejects unknown policy roles and permissions", async () => {
+    const app = createApp();
+    const adminToken = await loginWithRole(app, "admin");
+    const employeeToken = await loginWithRole(app, "employee");
+
+    const unauthorized = await request(app)
+      .post("/api/policies/permissions")
+      .set("Authorization", `Bearer ${employeeToken}`)
+      .send({ role: "employee", resource: "payroll", action: "read" });
+    expect(unauthorized.status).toBe(403);
+    expect(unauthorized.body.error.code).toBe("AUTHORIZATION_DENIED");
+
+    const unknownRole = await request(app)
+      .post("/api/policies/permissions")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ role: "contractor", resource: "reports", action: "read" });
+    expect(unknownRole.status).toBe(404);
+    expect(unknownRole.body.error.code).toBe("POLICY_ROLE_NOT_FOUND");
+
+    const unknownPermission = await request(app)
+      .post("/api/policies/permissions")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ role: "employee", resource: "secrets", action: "read" });
+    expect(unknownPermission.status).toBe(400);
+    expect(unknownPermission.body.error.code).toBe("POLICY_PERMISSION_NOT_SUPPORTED");
   });
 
   it("protects audit retrieval with the policy-management permission", async () => {
