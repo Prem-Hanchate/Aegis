@@ -1,5 +1,4 @@
 import type { AuthChallengeResponse, AuthMeResponse, AuthVerificationResponse } from "../types/auth";
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -76,4 +75,4 @@ export function fetchCurrentSession(accessToken: string): Promise<AuthMeResponse
 
 export function logout(accessToken: string): Promise<void> {
   return requestJson<void>("/auth/logout", { method: "POST" }, accessToken);
-}
+}

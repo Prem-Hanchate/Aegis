@@ -55,7 +55,13 @@ describe("independent feature additions", () => {
     expect(lookupResponse.status).toBe(200);
     expect(lookupResponse.body.identity.identityId).toBe(identity.identityId);
 
-    const updateResponse = await request(app).patch(`/api/identities/${identity.identityId}/profile`).send({
+    assignRole(identity.identityId, "admin");
+    const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
+    const message = challenge.body.challenge.message as string;
+    const signature = await wallet.signMessage(message);
+    const verification = await request(app).post("/api/auth/verify").send({ walletAddress: wallet.address, message, signature });
+    const accessToken = verification.body.result.session.accessToken as string;
+    const updateResponse = await request(app).patch(`/api/identities/${identity.identityId}/profile`).set("Authorization", `Bearer ${accessToken}`).send({
       displayName: "Updated Name",
     });
     expect(updateResponse.status).toBe(200);

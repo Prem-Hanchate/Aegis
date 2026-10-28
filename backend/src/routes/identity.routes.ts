@@ -14,7 +14,6 @@ import { validateBody } from "../middleware/requestValidator.js";
 import { authenticateRequest } from "../middleware/authentication.js";
 import { requireAuthorization } from "../services/authorization/authorization.service.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
-import { requireBlockchainAdministration } from "../middleware/blockchainAdministration.js";
 
 const createIdentitySchema = z.object({
   walletAddress: z.string().min(1),
@@ -29,14 +28,21 @@ const profileSchema = z.object({ displayName: z.string().trim().min(1).max(120) 
 
 export const identityRouter = Router();
 
-identityRouter.post("/", requireBlockchainAdministration, validateBody(createIdentitySchema), asyncHandler(createIdentityController));
-identityRouter.get("/", listIdentitiesController);
+identityRouter.post("/", validateBody(createIdentitySchema), asyncHandler(createIdentityController));
+identityRouter.get("/", authenticateRequest, requireAuthorization("policies", "manage"), listIdentitiesController);
 identityRouter.get("/wallet/:walletAddress", getIdentityByWalletController);
-identityRouter.get("/:identityId", getIdentityController);
-identityRouter.patch("/:identityId/profile", validateBody(profileSchema), updateIdentityProfileController);
+identityRouter.get("/:identityId", authenticateRequest, requireAuthorization("policies", "manage"), getIdentityController);
+identityRouter.patch(
+  "/:identityId/profile",
+  authenticateRequest,
+  requireAuthorization("policies", "manage"),
+  validateBody(profileSchema),
+  updateIdentityProfileController,
+);
 identityRouter.patch(
   "/:identityId/status",
-  requireBlockchainAdministration,
+  authenticateRequest,
+  requireAuthorization("policies", "manage"),
   validateBody(updateIdentityStatusSchema),
   asyncHandler(updateIdentityStatusController),
 );

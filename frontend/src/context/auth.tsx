@@ -68,6 +68,7 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
   // In-memory authentication state (no insecure bearer token persistence in localStorage)
   const [state, setState] = useState<AuthState>(initialAuthState);
 
+
   const setSession = useCallback(
     (
       identity: AuthIdentity,

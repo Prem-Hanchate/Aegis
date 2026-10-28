@@ -71,11 +71,11 @@ export function fetchResource(
 
 export interface DeviceSummary {
   deviceId: string;
-  identityId: string;
+  identityId?: string;
   name: string;
   fingerprint: string;
   status: "ACTIVE" | "REVOKED";
-  createdAt: string;
+  createdAt?: string;
   lastSeenAt: string;
   revokedAt?: string | null;
 }
@@ -147,4 +147,91 @@ export function bindDevice(
     accessToken,
     { method: "POST" },
   );
+}
+
+export interface ManagedIdentity {
+  identityId: string;
+  walletAddress: string;
+  displayName: string;
+  status: "ACTIVE" | "REVOKED";
+  roles: string[];
+  createdAt: string;
+}
+
+export interface PolicyMap {
+  [role: string]: string[];
+}
+
+export interface AuditEvent {
+  eventId: string;
+  eventType: string;
+  identityId: string;
+  resource: string;
+  action: string;
+  outcome: string;
+  reason: string | null;
+  timestamp: string;
+}
+
+export function fetchIdentities(accessToken: string): Promise<{ identities: ManagedIdentity[] }> {
+  return requestProtectedJson<{ identities: ManagedIdentity[] }>("/identities", accessToken);
+}
+
+export function registerIdentity(
+  accessToken: string,
+  payload: { walletAddress: string; displayName: string },
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>("/identities", accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateIdentityStatus(
+  accessToken: string,
+  identityId: string,
+  status: "ACTIVE" | "REVOKED",
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/status`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function fetchPolicies(accessToken: string): Promise<{ policies: PolicyMap }> {
+  return requestProtectedJson<{ policies: PolicyMap }>("/policies", accessToken);
+}
+
+export function grantPolicy(
+  accessToken: string,
+  payload: { role: string; resource: string; action: string },
+): Promise<unknown> {
+  return requestProtectedJson("/policies/permissions", accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAudit(
+  accessToken: string,
+  filters: { outcome?: string; eventType?: string; offset?: number; limit?: number } = {},
+): Promise<{ total: number; events: AuditEvent[] }> {
+  const query = new URLSearchParams({ limit: String(filters.limit ?? 10), offset: String(filters.offset ?? 0) });
+  if (filters.outcome) query.set("outcome", filters.outcome);
+  if (filters.eventType) query.set("eventType", filters.eventType);
+  return requestProtectedJson<{ total: number; events: AuditEvent[] }>(`/audit?${query.toString()}`, accessToken);
+}
+
+export function fetchAuditSummary(accessToken: string): Promise<{
+  summary: { total: number; byOutcome: Record<string, number>; byEventType: Record<string, number> };
+}> {
+  return requestProtectedJson<{
+    summary: { total: number; byOutcome: Record<string, number>; byEventType: Record<string, number> };
+  }>("/audit/summary", accessToken);
+}
+
+export function revokeAllSessions(accessToken: string): Promise<{ revokedCount: number }> {
+  return requestProtectedJson<{ revokedCount: number }>("/auth/sessions/revoke-all", accessToken, {
+    method: "POST",
+  });
 }

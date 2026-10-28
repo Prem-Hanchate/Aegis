@@ -8,6 +8,6 @@ export function ProtectedRoute() {
   if (state.status !== "authenticated" || !state.session) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-
   return <Outlet />;
 }
+
