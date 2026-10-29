@@ -4,12 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { logout as apiLogout } from "../services/auth";
+import { fetchCurrentSession, logout as apiLogout } from "../services/auth";
 
 export type AuthStatus = "anonymous" | "loading" | "authenticated" | "error";
 
@@ -67,9 +68,10 @@ const initialAuthState: AuthState = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthStateProvider({ children }: { children: ReactNode }) {
-  // In-memory authentication state (no insecure bearer token persistence in localStorage)
-  const [state, setState] = useState<AuthState>(initialAuthState);
-
+  const restoreToken = useRef(sessionStorage.getItem("aegis.accessToken"));
+  const [state, setState] = useState<AuthState>(() => (
+    restoreToken.current ? { ...initialAuthState, status: "loading" } : initialAuthState
+  ));
 
   const setSession = useCallback(
     (
@@ -88,11 +90,13 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
         permissions,
         errorMessage: null,
       });
+      sessionStorage.setItem("aegis.accessToken", session.accessToken);
     },
     [],
   );
 
   const clearSession = useCallback((errorMessage: string | null = null) => {
+    sessionStorage.removeItem("aegis.accessToken");
     setState({
       status: errorMessage ? "error" : "anonymous",
       identity: null,
@@ -103,6 +107,37 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
       errorMessage,
     });
   }, []);
+
+  useEffect(() => {
+    const accessToken = restoreToken.current;
+    if (!accessToken) {
+      return;
+    }
+
+    void fetchCurrentSession(accessToken)
+      .then((response) => {
+        setSession(
+          {
+            identityId: response.identity.identityId,
+            walletAddress: response.identity.walletAddress,
+            displayName: response.identity.displayName,
+            status: response.identity.status,
+            permissions: response.identity.permissions,
+          },
+          {
+            sessionId: response.session.sessionId,
+            accessToken,
+            expiresAt: response.session.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          },
+          response.session.roles ?? response.identity.roles,
+          response.session.deviceId,
+          response.identity.permissions ?? [],
+        );
+      })
+      .catch(() => {
+        clearSession();
+      });
+  }, [clearSession, setSession]);
 
   const setError = useCallback((errorMessage: string) => {
     setState((current) => ({
