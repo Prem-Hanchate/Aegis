@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuthState } from "../context/auth";
 import { ApiError } from "../services/auth";
 import { fetchAudit, fetchAuditSummary, type AuditEvent } from "../services/api";
@@ -125,7 +126,25 @@ export function AuditPage() {
         {loading ? <p className="muted-text" role="status">Loading audit events...</p> : null}
         {invalidFilter ? <div className="feedback feedback-error" role="alert">{error}</div> : null}
         {!loading && error && !invalidFilter ? <div className="feedback feedback-error" role="alert">{error}</div> : null}
-        {!loading && !error && events.length === 0 ? <div className="empty-state">No audit events match the current filters.</div> : null}
+        {!loading && !error && events.length === 0 ? (
+          <div className="audit-empty-state">
+            <div className="audit-empty-icon" aria-hidden="true">◎</div>
+            <div>
+              <h3>{total === 0 ? "Audit collection is ready" : "No matching events"}</h3>
+              <p>
+                {total === 0
+                  ? "This development instance has not recorded an event since its last restart. Use the live controls below to generate real security activity."
+                  : "No recorded events match the current filters. Clear a filter or return to the first page to continue reviewing activity."}
+              </p>
+              {total === 0 ? (
+                <div className="row-actions">
+                  <Link className="resource-button" to="/control-center">Open control center</Link>
+                  <Link className="quiet-button" to="/policies">Review policies</Link>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {!loading && !error && events.length > 0 ? (
           <div className="audit-table-wrap">

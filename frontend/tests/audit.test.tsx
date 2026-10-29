@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { AuthStateProvider, useAuthState } from "../src/context/auth";
 import { AuditPage } from "../src/pages/AuditPage";
 import { ApiError } from "../src/services/auth";
@@ -24,7 +25,7 @@ function AuthenticatedPage({ permissions = adminPermissions }: { permissions?: s
       permissions,
     );
   }, [permissions, setSession]);
-  return <AuditPage />;
+  return <MemoryRouter><AuditPage /></MemoryRouter>;
 }
 
 const event = {
@@ -70,5 +71,15 @@ describe("audit dashboard", () => {
     render(<AuthStateProvider><AuthenticatedPage permissions={["employee:read"]} /></AuthStateProvider>);
     expect(await screen.findByText("Access denied")).toBeInTheDocument();
     expect(fetchAudit).not.toHaveBeenCalled();
+  });
+
+  it("explains how to generate real activity when the audit store is empty", async () => {
+    vi.mocked(fetchAudit).mockResolvedValue({ total: 0, events: [] });
+    vi.mocked(fetchAuditSummary).mockResolvedValue({
+      summary: { total: 0, byOutcome: {}, byEventType: {} },
+    });
+    render(<AuthStateProvider><AuthenticatedPage /></AuthStateProvider>);
+    expect(await screen.findByText("Audit collection is ready")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open control center" })).toHaveAttribute("href", "/control-center");
   });
 });
