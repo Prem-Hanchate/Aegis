@@ -138,6 +138,11 @@ cannot change their own roles, preventing self-escalation. Optional blockchain w
 local identity state changes; blockchain failures are returned to the caller rather than silently
 being treated as successful local-only mutations.
 
+For a fresh local in-memory environment, set `BOOTSTRAP_ADMIN_WALLET` before starting the
+backend. The server will register that wallet as an `admin` identity once at startup, allowing
+the first MetaMask login. This is an explicit development convenience; use a controlled wallet
+and do not configure a shared bootstrap wallet in production.
+
 ## Policy Management and Protected Resources
 
 The `/policies` screen shows the live permission map for the supported `employee`, `manager`, and
