@@ -1,16 +1,24 @@
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { env } from "./config/env.js";
-import { assignRole, getIdentityByWallet, registerIdentity } from "./services/identity.service.js";
+import {
+  assignRole,
+  getIdentityByWallet,
+  registerIdentity,
+  updateIdentityStatus,
+} from "./services/identity.service.js";
 
 function bootstrapAdmin() {
-  if (env.isProduction || !env.bootstrapAdminWallet || getIdentityByWallet(env.bootstrapAdminWallet)) {
+  if (env.isProduction || !env.bootstrapAdminWallet) {
     return;
   }
 
-  const identity = registerIdentity(env.bootstrapAdminWallet, env.bootstrapAdminDisplayName);
+  const existingIdentity = getIdentityByWallet(env.bootstrapAdminWallet);
+  const identity = existingIdentity
+    ? updateIdentityStatus(existingIdentity.identityId, "ACTIVE")
+    : registerIdentity(env.bootstrapAdminWallet, env.bootstrapAdminDisplayName);
   assignRole(identity.identityId, "admin");
-  console.log(`Bootstrapped development administrator for ${identity.walletAddress}`);
+  console.log(`Bootstrapped development administrator for ${identity.walletAddress} (active)`);
 }
 
 async function bootstrap() {
