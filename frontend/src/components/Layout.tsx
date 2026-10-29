@@ -45,6 +45,9 @@ export function Layout() {
                 <NavLink to="/control-center" className={navLinkClassName}>
                   Control center
                 </NavLink>
+                <NavLink to="/audit" className={navLinkClassName}>
+                  Audit
+                </NavLink>
               </>
             ) : null}
             {state.permissions.includes("employee:read") ? (

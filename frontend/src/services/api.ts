@@ -171,11 +171,12 @@ export interface PolicyMap {
 export interface AuditEvent {
   eventId: string;
   eventType: string;
-  identityId: string;
-  resource: string;
-  action: string;
+  identityId: string | null;
+  resource: string | null;
+  action: string | null;
   outcome: string;
   reason: string | null;
+  actor: string | null;
   timestamp: string;
 }
 
@@ -275,9 +276,10 @@ export function revokePolicy(
 
 export function fetchAudit(
   accessToken: string,
-  filters: { outcome?: string; eventType?: string; offset?: number; limit?: number } = {},
+  filters: { identityId?: string; outcome?: string; eventType?: string; offset?: number; limit?: number } = {},
 ): Promise<{ total: number; events: AuditEvent[] }> {
   const query = new URLSearchParams({ limit: String(filters.limit ?? 10), offset: String(filters.offset ?? 0) });
+  if (filters.identityId) query.set("identityId", filters.identityId);
   if (filters.outcome) query.set("outcome", filters.outcome);
   if (filters.eventType) query.set("eventType", filters.eventType);
   return requestProtectedJson<{ total: number; events: AuditEvent[] }>(`/audit?${query.toString()}`, accessToken);

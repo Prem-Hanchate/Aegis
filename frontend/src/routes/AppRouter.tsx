@@ -10,6 +10,7 @@ import { NotFoundPage } from "../pages/NotFoundPage";
 import { ResourcePage } from "../pages/ResourcePage";
 import { IdentityAdministrationPage } from "../pages/IdentityAdministrationPage";
 import { PolicyManagementPage } from "../pages/PolicyManagementPage";
+import { AuditPage } from "../pages/AuditPage";
 
 export function AppRouter() {
   return (
@@ -24,6 +25,7 @@ export function AppRouter() {
             <Route path="/control-center" element={<ControlCenterPage />} />
             <Route path="/identities" element={<IdentityAdministrationPage />} />
             <Route path="/policies" element={<PolicyManagementPage />} />
+            <Route path="/audit" element={<AuditPage />} />
             <Route path="/resources/:resource" element={<ResourcePage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
