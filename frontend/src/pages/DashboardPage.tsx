@@ -31,8 +31,28 @@ export function DashboardPage() {
   const [resourceLoading, setResourceLoading] = useState(false);
   const [resourceResult, setResourceResult] = useState<ResourceAccessResponse | null>(null);
   const [resourceError, setResourceError] = useState<string | null>(null);
+  const [secondsUntilExpiry, setSecondsUntilExpiry] = useState<number | null>(null);
 
   const accessToken = state.session?.accessToken;
+
+  useEffect(() => {
+    if (!state.session?.expiresAt) {
+      setSecondsUntilExpiry(null);
+      return;
+    }
+
+    const updateExpiry = () => {
+      const remaining = Math.max(0, Math.ceil((new Date(state.session?.expiresAt ?? "").getTime() - Date.now()) / 1000));
+      setSecondsUntilExpiry(remaining);
+      if (remaining === 0) {
+        clearSession("Your session has expired. Please log in again.");
+      }
+    };
+
+    updateExpiry();
+    const timer = window.setInterval(updateExpiry, 1000);
+    return () => window.clearInterval(timer);
+  }, [state.session?.expiresAt, clearSession]);
 
   // Load operational backend health
   useEffect(() => {
@@ -176,6 +196,14 @@ export function DashboardPage() {
               {state.session?.expiresAt
                 ? new Date(state.session.expiresAt).toLocaleTimeString()
                 : "-"}
+            </strong>
+          </li>
+          <li>
+            <span>Time remaining</span>
+            <strong className={secondsUntilExpiry !== null && secondsUntilExpiry < 120 ? "error-text" : "success-text"}>
+              {secondsUntilExpiry === null
+                ? "-"
+                : `${Math.floor(secondsUntilExpiry / 60)}m ${String(secondsUntilExpiry % 60).padStart(2, "0")}s`}
             </strong>
           </li>
           <li>

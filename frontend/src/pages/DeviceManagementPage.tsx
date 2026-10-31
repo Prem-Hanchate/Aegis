@@ -418,13 +418,13 @@ export function DeviceManagementPage() {
                       <div>
                         <span className="meta-label">Last Seen</span>
                         <span className="meta-time">
-                          {new Date(device.lastSeenAt).toLocaleString()}
+                          {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "Not available"}
                         </span>
                       </div>
                       <div>
                         <span className="meta-label">Enrolled</span>
                         <span className="meta-time">
-                          {new Date(device.createdAt).toLocaleDateString()}
+                          {device.createdAt ? new Date(device.createdAt).toLocaleDateString() : "Not available"}
                         </span>
                       </div>
                     </div>

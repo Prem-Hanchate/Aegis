@@ -10,6 +10,7 @@ import {
   type SetStateAction,
 } from "react";
 import { logout as apiLogout } from "../services/auth";
+import { createTestModeSession, isTestMode } from "../config/testMode";
 
 export type AuthStatus = "anonymous" | "loading" | "authenticated" | "error";
 
@@ -51,6 +52,8 @@ interface AuthContextValue {
   clearSession: (errorMessage?: string | null) => void;
   setError: (errorMessage: string) => void;
   setLoading: (loading: boolean) => void;
+  testModeEnabled: boolean;
+  setTestModeEnabled: (enabled: boolean) => void;
   logout: () => Promise<void>;
 }
 
@@ -69,6 +72,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthStateProvider({ children }: { children: ReactNode }) {
   // In-memory authentication state (no insecure bearer token persistence in localStorage)
   const [state, setState] = useState<AuthState>(initialAuthState);
+  const [testModeEnabled, setTestModeEnabledState] = useState(isTestMode);
+
+  useEffect(() => {
+    if (isTestMode && testModeEnabled) setState(createTestModeSession());
+  }, []);
+
+  const setTestModeEnabled = useCallback((enabled: boolean) => {
+    if (!isTestMode) return;
+    setTestModeEnabledState(enabled);
+    setState(enabled ? createTestModeSession() : initialAuthState);
+  }, []);
 
 
   const setSession = useCallback(
@@ -171,9 +185,11 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
       clearSession,
       setError,
       setLoading,
+      testModeEnabled,
+      setTestModeEnabled,
       logout,
     }),
-    [state, setSession, setDeviceId, clearSession, setError, setLoading, logout],
+    [state, setSession, setDeviceId, clearSession, setError, setLoading, testModeEnabled, setTestModeEnabled, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

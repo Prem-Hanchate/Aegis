@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuthState } from "../context/auth";
+import { isTestMode } from "../config/testMode";
 
 const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
   ["nav-link", isActive ? "nav-link-active" : ""].filter(Boolean).join(" ");
@@ -11,7 +12,7 @@ function shortenAddress(address: string): string {
 
 export function Layout() {
   const navigate = useNavigate();
-  const { state, logout } = useAuthState();
+  const { state, logout, testModeEnabled, setTestModeEnabled } = useAuthState();
 
   async function handleLogout() {
     await logout();
@@ -21,44 +22,47 @@ export function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div>
+        <div className="topbar-heading">
           <p className="eyebrow">Aegis</p>
           <h1>Zero Trust Access Controller</h1>
         </div>
 
         <div className="topbar-actions">
           <nav className="nav">
-            <NavLink to="/" className={navLinkClassName}>
-              Dashboard
-            </NavLink>
-            <NavLink to="/devices" className={navLinkClassName}>
-              Devices
-            </NavLink>
+            <div className="nav-group">
+              <span className="nav-group-label">Overview</span>
+              <NavLink to="/" className={navLinkClassName}>Dashboard</NavLink>
+            </div>
+            <div className="nav-group">
+              <span className="nav-group-label">My security</span>
+              <NavLink to="/devices" className={navLinkClassName}>My devices</NavLink>
+            </div>
+            {state.permissions.some((permission) => ["employee:read", "reports:read", "payroll:read"].includes(permission)) ? (
+              <div className="nav-group">
+                <span className="nav-group-label">Access</span>
+                {state.permissions.includes("employee:read") ? <NavLink to="/resources/employee" className={navLinkClassName}>Employee</NavLink> : null}
+                {state.permissions.includes("reports:read") ? <NavLink to="/resources/reports" className={navLinkClassName}>Reports</NavLink> : null}
+                {state.permissions.includes("payroll:read") ? <NavLink to="/resources/payroll" className={navLinkClassName}>Payroll</NavLink> : null}
+              </div>
+            ) : null}
             {state.permissions.includes("policies:manage") ? (
-              <>
+              <div className="nav-group">
+                <span className="nav-group-label">Administration</span>
                 <NavLink to="/identities" className={navLinkClassName}>
-                  Identities
+                  Identity management
                 </NavLink>
                 <NavLink to="/policies" className={navLinkClassName}>
-                  Policies
+                  Roles &amp; permissions
                 </NavLink>
                 <NavLink to="/control-center" className={navLinkClassName}>
                   Control center
                 </NavLink>
-              </>
+              </div>
             ) : null}
-            {state.permissions.includes("employee:read") ? (
-              <NavLink to="/resources/employee" className={navLinkClassName}>Employee</NavLink>
-            ) : null}
-            {state.permissions.includes("reports:read") ? (
-              <NavLink to="/resources/reports" className={navLinkClassName}>Reports</NavLink>
-            ) : null}
-            {state.permissions.includes("payroll:read") ? (
-              <NavLink to="/resources/payroll" className={navLinkClassName}>Payroll</NavLink>
-            ) : null}
-            <NavLink to="/health" className={navLinkClassName}>
-              Health
-            </NavLink>
+            <div className="nav-group">
+              <span className="nav-group-label">Monitoring</span>
+              <NavLink to="/health" className={navLinkClassName}>System health</NavLink>
+            </div>
           </nav>
 
           {state.identity && state.session ? (
@@ -84,6 +88,19 @@ export function Layout() {
               Sign in
             </NavLink>
           )}
+          {isTestMode ? (
+            <button
+              className={`test-mode-toggle ${testModeEnabled ? "test-mode-toggle-active" : ""}`}
+              type="button"
+              role="switch"
+              aria-checked={testModeEnabled}
+              onClick={() => setTestModeEnabled(!testModeEnabled)}
+              title={testModeEnabled ? "Disable development test mode" : "Enable development test mode"}
+            >
+              <span className="test-mode-toggle-track"><span /></span>
+              <span>Test mode</span>
+            </button>
+          ) : null}
         </div>
       </header>
 
