@@ -10,11 +10,11 @@ const auditQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-export function listAuditController(request: Request, response: Response) {
+export async function listAuditController(request: Request, response: Response) {
   const query = auditQuerySchema.parse(request.query);
-  return response.status(200).json(listAuditEvents(query));
+  return response.status(200).json(await listAuditEvents(query));
 }
 
-export function summarizeAuditController(_request: Request, response: Response) {
-  return response.status(200).json({ summary: summarizeAuditEvents() });
+export async function summarizeAuditController(_request: Request, response: Response) {
+  return response.status(200).json({ summary: await summarizeAuditEvents() });
 }

@@ -25,25 +25,25 @@ const identityQuerySchema = z.object({
 export async function createIdentityController(request: Request, response: Response) {
   requireAuthenticatedRequest(request);
   const { walletAddress, displayName } = request.body as { walletAddress: string; displayName: string };
-  assertIdentityRegistrationAvailable(walletAddress);
+  await assertIdentityRegistrationAvailable(walletAddress);
   const identityId = randomUUID();
   const transaction = await submitBlockchainWrite(async (client) => ({
     registration: await client.registerIdentity(identityId, walletAddress),
     activation: await client.activateIdentity(identityId),
     status: "confirmed" as const,
   }));
-  const identity = registerIdentity(walletAddress, displayName, identityId);
+  const identity = await registerIdentity(walletAddress, displayName, identityId);
   return response.status(201).json({ identity, transaction });
 }
 
-export function listIdentitiesController(request: Request, response: Response) {
+export async function listIdentitiesController(request: Request, response: Response) {
   const query = identityQuerySchema.parse(request.query);
-  return response.status(200).json({ identities: listIdentities(query) });
+  return response.status(200).json({ identities: await listIdentities(query) });
 }
 
-export function getIdentityController(request: Request, response: Response) {
+export async function getIdentityController(request: Request, response: Response) {
   const identityId = getIdentityId(request);
-  return response.status(200).json({ identity: getIdentity(identityId) });
+  return response.status(200).json({ identity: await getIdentity(identityId) });
 }
 
 export async function updateIdentityStatusController(request: Request, response: Response) {
@@ -52,7 +52,7 @@ export async function updateIdentityStatusController(request: Request, response:
   const transaction = status === "ACTIVE"
     ? await submitBlockchainWrite((client) => client.activateIdentity(identityId))
     : await submitBlockchainWrite((client) => client.revokeIdentity(identityId));
-  return response.status(200).json({ identity: updateIdentityStatus(identityId, status), transaction });
+  return response.status(200).json({ identity: await updateIdentityStatus(identityId, status), transaction });
 }
 
 function getIdentityId(request: Request) {
@@ -71,7 +71,7 @@ export async function assignIdentityRoleController(request: Request, response: R
   }
   const { role } = request.body as { role: string };
   const transaction = await submitBlockchainWrite((client) => client.assignRole(identityId, role));
-  return response.status(200).json({ identity: assignRole(identityId, role), transaction });
+  return response.status(200).json({ identity: await assignRole(identityId, role), transaction });
 }
 
 export async function removeIdentityRoleController(request: Request, response: Response) {
@@ -82,24 +82,24 @@ export async function removeIdentityRoleController(request: Request, response: R
   }
   const role = request.body.role as string;
   const transaction = await submitBlockchainWrite((client) => client.removeRole(identityId, role));
-  return response.status(200).json({ identity: removeRole(identityId, role), transaction });
+  return response.status(200).json({ identity: await removeRole(identityId, role), transaction });
 }
 
-export function getIdentityByWalletController(request: Request, response: Response) {
+export async function getIdentityByWalletController(request: Request, response: Response) {
   const walletAddress = request.params.walletAddress;
   if (typeof walletAddress !== "string" || !walletAddress) {
     throw new AppError("Wallet address is required.", 400, "IDENTITY_INVALID_WALLET_ADDRESS");
   }
 
-  const identity = getIdentityByWallet(walletAddress);
+  const identity = await getIdentityByWallet(walletAddress);
   if (!identity) {
     throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
   }
   return response.status(200).json({ identity });
 }
 
-export function updateIdentityProfileController(request: Request, response: Response) {
+export async function updateIdentityProfileController(request: Request, response: Response) {
   const identityId = getIdentityId(request);
   const { displayName } = request.body as { displayName: string };
-  return response.status(200).json({ identity: updateIdentityProfile(identityId, displayName) });
+  return response.status(200).json({ identity: await updateIdentityProfile(identityId, displayName) });
 }

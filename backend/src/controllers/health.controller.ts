@@ -14,6 +14,7 @@ export function healthCheckController(_request: Request, response: Response) {
       connected: database.connected,
       readyState: database.readyState,
       name: database.name,
+      lastError: database.lastError,
     },
   });
 }
@@ -29,6 +30,7 @@ export function readinessCheckController(_request: Request, response: Response) 
       connected: database.connected,
       readyState: database.readyState,
       name: database.name,
+      lastError: database.lastError,
     },
   });
 }

@@ -22,7 +22,7 @@ function toIsoString(date: Date) {
   return date.toISOString();
 }
 
-export function issueLoginChallenge(walletAddress: string, now = new Date()): IssuedLoginChallenge {
+export async function issueLoginChallenge(walletAddress: string, now = new Date()): Promise<IssuedLoginChallenge> {
   const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
   const nonce = randomBytes(32).toString("hex");
   const issuedAt = toIsoString(now);
@@ -38,7 +38,7 @@ export function issueLoginChallenge(walletAddress: string, now = new Date()): Is
   };
   const message = createAuthMessage(payload);
 
-  saveChallenge({
+  await saveChallenge({
     ...payload,
     message,
     used: false,
@@ -51,12 +51,12 @@ export function issueLoginChallenge(walletAddress: string, now = new Date()): Is
   };
 }
 
-export function verifyLoginChallenge(
+export async function verifyLoginChallenge(
   walletAddress: string,
   message: string,
   signature: string,
   now = new Date(),
-): AuthVerificationResult {
+): Promise<AuthVerificationResult> {
   const parsedMessage = parseAuthMessage(message);
 
   if (!parsedMessage) {
@@ -64,7 +64,7 @@ export function verifyLoginChallenge(
   }
 
   const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
-  const challenge = getChallenge(parsedMessage.nonce);
+  const challenge = await getChallenge(parsedMessage.nonce);
 
   if (!challenge) {
     throw new AppError("The nonce could not be found.", 400, "AUTH_NONCE_NOT_FOUND");
@@ -98,7 +98,7 @@ export function verifyLoginChallenge(
     throw new AppError("The signature does not match the registered wallet.", 400, "AUTH_INVALID_SIGNATURE");
   }
 
-  const identity = getIdentityByWallet(challenge.walletAddress);
+  const identity = await getIdentityByWallet(challenge.walletAddress);
   if (!identity) {
     throw new AppError("No identity is registered for this wallet.", 403, "AUTH_IDENTITY_NOT_FOUND");
   }
@@ -106,8 +106,11 @@ export function verifyLoginChallenge(
     throw new AppError("The identity is revoked.", 403, "AUTH_IDENTITY_REVOKED");
   }
 
-  markChallengeUsed(challenge.nonce, toIsoString(now));
-  const { session, accessToken } = createSession(identity.identityId, now);
+  const claimedChallenge = await markChallengeUsed(challenge.nonce, toIsoString(now));
+  if (!claimedChallenge) {
+    throw new AppError("The nonce has already been used.", 400, "AUTH_NONCE_REUSED");
+  }
+  const { session, accessToken } = await createSession(identity.identityId, now);
 
   return {
     walletAddress: challenge.walletAddress,
@@ -118,7 +121,7 @@ export function verifyLoginChallenge(
       displayName: identity.displayName,
       status: identity.status,
       roles: identity.roles,
-      permissions: getPermissionsForRoles(identity.roles),
+      permissions: await getPermissionsForRoles(identity.roles),
     },
     session: {
       sessionId: session.sessionId,

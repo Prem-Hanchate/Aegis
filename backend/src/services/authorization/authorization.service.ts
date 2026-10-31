@@ -1,121 +1,96 @@
 import { AppError } from "../../middleware/AppError.js";
 import type { RequestHandler } from "express";
+import { policyRepository } from "../../repositories/index.js";
 import { getIdentity } from "../identity.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
+import { asyncHandler } from "../../middleware/asyncHandler.js";
 
 const defaultRolePermissions: Record<string, string[]> = {
   employee: ["employee:read", "reports:read"],
   manager: ["employee:read", "reports:read", "payroll:read"],
   admin: ["employee:read", "reports:read", "payroll:read", "policies:manage"],
 };
-
-const rolePermissions: Record<string, Set<string>> = {
-  employee: new Set(["employee:read", "reports:read"]),
-  manager: new Set(["employee:read", "reports:read", "payroll:read"]),
-  admin: new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]),
+const supportedPermissions = new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]);
+const POLICY_BOOTSTRAP_ROLE = "__system__";
+const POLICY_BOOTSTRAP_PERMISSION = "__defaults_initialized__";
+const ensureDefaults = async () => {
+  const existing = await policyRepository.list();
+  if (existing.some((policy) => policy.role === POLICY_BOOTSTRAP_ROLE && policy.permission === POLICY_BOOTSTRAP_PERMISSION)) {
+    return;
+  }
+  const present = new Set(existing.map((policy) => `${policy.role}:${policy.permission}`));
+  await Promise.all(Object.entries(defaultRolePermissions).flatMap(([role, permissions]) => permissions
+    .filter((permission) => !present.has(`${role}:${permission}`))
+    .map((permission) => {
+      const [resource = "", action = ""] = permission.split(":");
+      const now = new Date().toISOString();
+      return policyRepository.upsert({ role, resource, action, permission, createdAt: now, updatedAt: now });
+    })));
+  const now = new Date().toISOString();
+  await policyRepository.upsert({
+    role: POLICY_BOOTSTRAP_ROLE,
+    resource: POLICY_BOOTSTRAP_ROLE,
+    action: POLICY_BOOTSTRAP_PERMISSION,
+    permission: POLICY_BOOTSTRAP_PERMISSION,
+    createdAt: now,
+    updatedAt: now,
+  });
 };
-
-const supportedPermissions = new Set([
-  "employee:read",
-  "reports:read",
-  "payroll:read",
-  "policies:manage",
-]);
 
 export function assertSupportedPolicy(role: string, resource: string, action: string) {
   const normalizedRole = role.trim();
   const permission = `${resource.trim()}:${action.trim()}`;
-  if (!Object.hasOwn(defaultRolePermissions, normalizedRole)) {
-    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
-  }
-  if (!supportedPermissions.has(permission)) {
-    throw new AppError("Permission is not supported.", 400, "POLICY_PERMISSION_NOT_SUPPORTED");
-  }
+  if (!Object.hasOwn(defaultRolePermissions, normalizedRole)) throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
+  if (!supportedPermissions.has(permission)) throw new AppError("Permission is not supported.", 400, "POLICY_PERMISSION_NOT_SUPPORTED");
   return { role: normalizedRole, permission };
 }
-
-export function getPermissionsForRoles(roles: string[]) {
-  return [...new Set(roles.flatMap((role) => [...(rolePermissions[role] ?? [])]))];
+export async function getPermissionsForRoles(roles: string[]) {
+  await ensureDefaults();
+  const policies = (await policyRepository.list()).filter((policy) => Object.hasOwn(defaultRolePermissions, policy.role));
+  const allowed = new Set(roles);
+  return policies.filter((policy) => allowed.has(policy.role)).map((policy) => policy.permission);
 }
-
-export function hasPermission(identityId: string, resource: string, action: string) {
-  const identity = getIdentity(identityId);
-  const permission = `${resource}:${action}`;
-  return identity.status === "ACTIVE"
-    && getPermissionsForRoles(identity.roles).includes(permission);
+export async function hasPermission(identityId: string, resource: string, action: string) {
+  const identity = await getIdentity(identityId);
+  return identity.status === "ACTIVE" && (await getPermissionsForRoles(identity.roles)).includes(`${resource}:${action}`);
 }
-
-export function authorizeRequest(identityId: string, resource: string, action: string) {
-  const identity = getIdentity(identityId);
-  const allowed = hasPermission(identityId, resource, action);
-
-  recordAuditEvent({
-    eventType: "ACCESS_DECISION",
-    identityId,
-    resource,
-    action,
-    outcome: allowed ? "ALLOWED" : "DENIED",
-    reason: allowed ? null : "No active role grants this permission.",
-    actor: identity.walletAddress,
-  });
-
-  if (!allowed) {
-    throw new AppError("Access denied.", 403, "AUTHORIZATION_DENIED", { resource, action });
-  }
-
+export async function authorizeRequest(identityId: string, resource: string, action: string) {
+  const identity = await getIdentity(identityId);
+  const allowed = await hasPermission(identityId, resource, action);
+  await recordAuditEvent({ eventType: "ACCESS_DECISION", identityId, resource, action, outcome: allowed ? "ALLOWED" : "DENIED", reason: allowed ? null : "No active role grants this permission.", actor: identity.walletAddress });
+  if (!allowed) throw new AppError("Access denied.", 403, "AUTHORIZATION_DENIED", { resource, action });
   return { allowed: true, identityId, resource, action };
 }
-
 export function requireAuthorization(resource: string, action: string) {
-  const middleware: RequestHandler = (request, _response, next) => {
-    try {
-      const authenticatedRequest = request as RequestWithAuth;
-      if (!authenticatedRequest.auth) {
-        throw new AppError("The request is not authenticated.", 401, "SESSION_MISSING");
-      }
-      authorizeRequest(authenticatedRequest.auth.identityId, resource, action);
-      next();
-    } catch (error) {
-      next(error);
+  const middleware: RequestHandler = asyncHandler(async (request, _response, next) => {
+    const authenticatedRequest = request as RequestWithAuth;
+    if (!authenticatedRequest.auth) {
+      return next(new AppError("The request is not authenticated.", 401, "SESSION_MISSING"));
     }
-  };
-
+    await authorizeRequest(authenticatedRequest.auth.identityId, resource, action);
+    return next();
+  });
   return middleware;
 }
-
-interface RequestWithAuth {
-  auth?: { identityId: string };
+interface RequestWithAuth { auth?: { identityId: string } }
+export async function clearAuthorizationState() {
+  if (process.env.NODE_ENV !== "test") throw new AppError("Authorization clearing is only available in tests.", 403, "TEST_ONLY_OPERATION");
+  await policyRepository.clear();
+  await ensureDefaults();
 }
-
-export function clearAuthorizationState() {
-  for (const role of Object.keys(rolePermissions)) {
-    delete rolePermissions[role];
-  }
-  for (const [role, permissions] of Object.entries(defaultRolePermissions)) {
-    rolePermissions[role] = new Set(permissions);
-  }
+export async function listRolePermissions() {
+  await ensureDefaults();
+  const policies = (await policyRepository.list()).filter((policy) => Object.hasOwn(defaultRolePermissions, policy.role));
+  return Object.fromEntries(Object.keys(defaultRolePermissions).map((role) => [role, policies.filter((policy) => policy.role === role).map((policy) => policy.permission)]));
 }
-
-export function listRolePermissions() {
-  return Object.fromEntries(Object.entries(rolePermissions).map(([role, permissions]) => [role, [...permissions]]));
-}
-
-export function grantRolePermission(role: string, resource: string, action: string) {
+export async function grantRolePermission(role: string, resource: string, action: string) {
   const { role: normalizedRole, permission } = assertSupportedPolicy(role, resource, action);
-  const permissions = rolePermissions[normalizedRole];
-  if (!permissions) {
-    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
-  }
-  permissions.add(permission);
-  return { role: normalizedRole, permissions: [...permissions] };
+  const now = new Date().toISOString();
+  await policyRepository.upsert({ role: normalizedRole, resource: resource.trim(), action: action.trim(), permission, createdAt: now, updatedAt: now });
+  return { role: normalizedRole, permissions: await getPermissionsForRoles([normalizedRole]) };
 }
-
-export function revokeRolePermission(role: string, resource: string, action: string) {
+export async function revokeRolePermission(role: string, resource: string, action: string) {
   const { role: normalizedRole, permission } = assertSupportedPolicy(role, resource, action);
-  const permissions = rolePermissions[normalizedRole];
-  if (!permissions) {
-    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
-  }
-  permissions.delete(permission);
-  return { role: normalizedRole, permissions: [...permissions] };
+  await policyRepository.delete(normalizedRole, permission);
+  return { role: normalizedRole, permissions: await getPermissionsForRoles([normalizedRole]) };
 }

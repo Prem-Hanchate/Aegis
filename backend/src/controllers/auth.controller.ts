@@ -6,23 +6,23 @@ import { revokeAllSessionsForIdentity } from "../services/session.service.js";
 import { getIdentity } from "../services/identity.service.js";
 import { getPermissionsForRoles } from "../services/authorization/authorization.service.js";
 
-export function createLoginChallengeController(request: Request, response: Response) {
+export async function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
-  const challenge = issueLoginChallenge(walletAddress);
+  const challenge = await issueLoginChallenge(walletAddress);
 
   return response.status(201).json({
     challenge,
   });
 }
 
-export function verifyLoginChallengeController(request: Request, response: Response) {
+export async function verifyLoginChallengeController(request: Request, response: Response) {
   const { walletAddress, message, signature } = request.body as {
     walletAddress: string;
     message: string;
     signature: string;
   };
 
-  const result = verifyLoginChallenge(walletAddress, message, signature);
+  const result = await verifyLoginChallenge(walletAddress, message, signature);
 
   return response.status(200).json({
     status: "authenticated",
@@ -30,7 +30,7 @@ export function verifyLoginChallengeController(request: Request, response: Respo
   });
 }
 
-export function logoutController(request: Request, response: Response) {
+export async function logoutController(request: Request, response: Response) {
   const authorization = request.header("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
   if (!accessToken) {
@@ -39,23 +39,23 @@ export function logoutController(request: Request, response: Response) {
     });
   }
 
-  revokeSession(accessToken);
+  await revokeSession(accessToken);
   return response.status(204).send();
 }
 
-export function currentSessionController(request: Request, response: Response) {
+export async function currentSessionController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   return response.status(200).json({
     session: auth,
     identity: {
-      ...getIdentity(auth.identityId),
-      permissions: getPermissionsForRoles(auth.roles),
+      ...(await getIdentity(auth.identityId)),
+      permissions: await getPermissionsForRoles(auth.roles),
     },
   });
 }
 
-export function revokeAllSessionsController(request: Request, response: Response) {
+export async function revokeAllSessionsController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
-  const revokedCount = revokeAllSessionsForIdentity(auth.identityId);
+  const revokedCount = await revokeAllSessionsForIdentity(auth.identityId);
   return response.status(200).json({ revokedCount });
 }

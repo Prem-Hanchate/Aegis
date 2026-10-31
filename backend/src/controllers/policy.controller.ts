@@ -5,16 +5,16 @@ import { requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { AppError } from "../middleware/AppError.js";
 import { submitBlockchainWrite } from "../services/blockchain.service.js";
 
-export function listPoliciesController(_request: Request, response: Response) {
-  return response.status(200).json({ policies: listRolePermissions() });
+export async function listPoliciesController(_request: Request, response: Response) {
+  return response.status(200).json({ policies: await listRolePermissions() });
 }
 
 export async function grantPolicyController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   const { role, resource, action } = request.body as { role: string; resource: string; action: string };
   const transaction = await submitBlockchainWrite((client) => client.createPolicy(role, resource, action));
-  const policy = grantRolePermission(role, resource, action);
-  recordAuditEvent({ eventType: "POLICY_CHANGED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: "Permission granted.", actor: auth.identityId });
+  const policy = await grantRolePermission(role, resource, action);
+  await recordAuditEvent({ eventType: "POLICY_CHANGED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: "Permission granted.", actor: auth.identityId });
   return response.status(201).json({ policy, transaction });
 }
 
@@ -26,7 +26,7 @@ export async function revokePolicyController(request: Request, response: Respons
     throw new AppError("Role is required.", 400, "POLICY_INVALID_ROLE");
   }
   const transaction = await submitBlockchainWrite((client) => client.revokePolicy(role, resource, action));
-  const policy = revokeRolePermission(role, resource, action);
-  recordAuditEvent({ eventType: "POLICY_CHANGED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: "Permission revoked.", actor: auth.identityId });
+  const policy = await revokeRolePermission(role, resource, action);
+  await recordAuditEvent({ eventType: "POLICY_CHANGED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: "Permission revoked.", actor: auth.identityId });
   return response.status(200).json({ policy, transaction });
 }

@@ -11,6 +11,6 @@ const revokeSchema = z.object({ resource: z.string().trim().min(1), action: z.st
 
 export const policyRouter = Router();
 policyRouter.use(authenticateRequest, requireAuthorization("policies", "manage"));
-policyRouter.get("/", listPoliciesController);
+policyRouter.get("/", asyncHandler(listPoliciesController));
 policyRouter.post("/permissions", validateBody(policySchema), asyncHandler(grantPolicyController));
 policyRouter.delete("/:role/permissions", validateBody(revokeSchema), asyncHandler(revokePolicyController));

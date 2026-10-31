@@ -1,31 +1,13 @@
+import { AppError } from "../../middleware/AppError.js";
+import { challengeRepository } from "../../repositories/index.js";
 import type { LoginChallenge } from "./challenge.types.js";
 
-const challengeStore = new Map<string, LoginChallenge>();
-
-export function saveChallenge(challenge: LoginChallenge) {
-  challengeStore.set(challenge.nonce, challenge);
+export async function saveChallenge(challenge: LoginChallenge) { return challengeRepository.create(challenge); }
+export async function getChallenge(nonce: string) { return challengeRepository.findByNonce(nonce); }
+export async function markChallengeUsed(nonce: string, usedAt: string) {
+  return challengeRepository.claim(nonce, new Date(usedAt));
 }
-
-export function getChallenge(nonce: string) {
-  return challengeStore.get(nonce) ?? null;
-}
-
-export function markChallengeUsed(nonce: string, usedAt: string) {
-  const challenge = challengeStore.get(nonce);
-  if (!challenge) {
-    return null;
-  }
-
-  const updatedChallenge = {
-    ...challenge,
-    used: true,
-    usedAt,
-  };
-
-  challengeStore.set(nonce, updatedChallenge);
-  return updatedChallenge;
-}
-
-export function clearChallengeStore() {
-  challengeStore.clear();
+export async function clearChallengeStore() {
+  if (process.env.NODE_ENV !== "test") throw new AppError("Challenge store clearing is only available in tests.", 403, "TEST_ONLY_OPERATION");
+  await challengeRepository.clear();
 }

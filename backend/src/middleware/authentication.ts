@@ -4,6 +4,8 @@ import { getIdentity } from "../services/identity.service.js";
 import { getActiveSession } from "../services/session.service.js";
 import { recordAuditEvent } from "../services/audit/audit.service.js";
 import { getActiveDevice } from "../services/device.service.js";
+import { asyncHandler } from "./asyncHandler.js";
+import { getDatabaseStatus } from "../config/database.js";
 
 export interface AuthenticatedRequest extends Request {
   auth: {
@@ -14,7 +16,7 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-export function authenticateRequest(request: Request, _response: Response, next: NextFunction) {
+async function authenticateRequestHandler(request: Request, _response: Response, next: NextFunction) {
   const authorization = request.header("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
 
@@ -23,13 +25,14 @@ export function authenticateRequest(request: Request, _response: Response, next:
   }
 
   try {
-    const session = getActiveSession(accessToken);
-    const identity = getIdentity(session.identityId);
+    const session = await getActiveSession(accessToken);
+    const identity = await getIdentity(session.identityId);
     if (identity.status !== "ACTIVE") {
       throw new AppError("The identity is revoked.", 403, "AUTH_IDENTITY_REVOKED");
     }
+
     if (session.deviceId) {
-      getActiveDevice(session.deviceId, identity.identityId);
+      await getActiveDevice(session.deviceId, identity.identityId);
     }
 
     (request as AuthenticatedRequest).auth = {
@@ -43,9 +46,14 @@ export function authenticateRequest(request: Request, _response: Response, next:
     if (error instanceof AppError) {
       return next(error);
     }
+    if (!getDatabaseStatus().connected) {
+      return next(new AppError("The database is unavailable.", 503, "DATABASE_UNAVAILABLE"));
+    }
     return next(new AppError("The session could not be validated.", 401, "SESSION_INVALID"));
   }
 }
+
+export const authenticateRequest = asyncHandler(authenticateRequestHandler);
 
 export function requireAuthenticatedRequest(request: Request): AuthenticatedRequest {
   const authenticatedRequest = request as Partial<AuthenticatedRequest>;
@@ -55,8 +63,8 @@ export function requireAuthenticatedRequest(request: Request): AuthenticatedRequ
   return authenticatedRequest as AuthenticatedRequest;
 }
 
-export function recordAuthenticationFailure(request: Request, reason: string) {
-  recordAuditEvent({
+export async function recordAuthenticationFailure(request: Request, reason: string) {
+  await recordAuditEvent({
     eventType: "AUTHENTICATION_FAILURE",
     identityId: null,
     resource: request.path,

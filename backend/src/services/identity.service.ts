@@ -1,133 +1,91 @@
 import { randomUUID } from "node:crypto";
 import { getAddress } from "ethers";
 import { AppError } from "../middleware/AppError.js";
+import { identityRepository } from "../repositories/index.js";
 import { revokeSessionsForIdentity } from "./session.service.js";
 
 export type IdentityStatus = "ACTIVE" | "REVOKED";
-
 export interface Identity {
-  identityId: string;
-  walletAddress: string;
-  displayName: string;
-  status: IdentityStatus;
-  roles: string[];
-  createdAt: string;
-  updatedAt: string;
+  identityId: string; walletAddress: string; displayName: string; status: IdentityStatus;
+  roles: string[]; createdAt: string; updatedAt: string;
 }
-
-const identities = new Map<string, Identity>();
 
 function normalizeWalletAddress(walletAddress: string) {
-  try {
-    return getAddress(walletAddress);
-  } catch {
-    throw new AppError("Invalid wallet address.", 400, "IDENTITY_INVALID_WALLET_ADDRESS");
-  }
+  try { return getAddress(walletAddress); } catch { throw new AppError("Invalid wallet address.", 400, "IDENTITY_INVALID_WALLET_ADDRESS"); }
 }
 
-function findByWallet(walletAddress: string) {
-  const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
-  return [...identities.values()].find((identity) => identity.walletAddress === normalizedWalletAddress) ?? null;
-}
-
-export function assertIdentityRegistrationAvailable(walletAddress: string) {
-  if (findByWallet(walletAddress)) {
+export async function assertIdentityRegistrationAvailable(walletAddress: string) {
+  if (await identityRepository.findByWallet(normalizeWalletAddress(walletAddress))) {
     throw new AppError("An identity already exists for this wallet.", 409, "IDENTITY_ALREADY_EXISTS");
   }
 }
 
-export function registerIdentity(walletAddress: string, displayName: string, identityId = randomUUID()): Identity {
+export async function registerIdentity(walletAddress: string, displayName: string, identityId = randomUUID()) {
   const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
-  assertIdentityRegistrationAvailable(normalizedWalletAddress);
-
+  await assertIdentityRegistrationAvailable(normalizedWalletAddress);
   const now = new Date().toISOString();
-  const identity: Identity = {
-    identityId,
-    walletAddress: normalizedWalletAddress,
-    displayName: displayName.trim(),
-    status: "ACTIVE",
-    roles: [],
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  identities.set(identity.identityId, identity);
-  return identity;
+  try {
+    return await identityRepository.create({ identityId, walletAddress: normalizedWalletAddress, displayName: displayName.trim(), status: "ACTIVE", roles: [], createdAt: now, updatedAt: now });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+      throw new AppError("An identity already exists for this wallet.", 409, "IDENTITY_ALREADY_EXISTS");
+    }
+    throw error;
+  }
 }
 
-export function listIdentities(filter: { search?: string; status?: IdentityStatus } = {}) {
+export async function listIdentities(filter: { search?: string; status?: IdentityStatus } = {}) {
   const search = filter.search?.trim().toLowerCase();
-  return [...identities.values()].filter((identity) => {
-    const matchesStatus = !filter.status || identity.status === filter.status;
-    const matchesSearch = !search
-      || identity.displayName.toLowerCase().includes(search)
-      || identity.walletAddress.toLowerCase().includes(search)
-      || identity.roles.some((role) => role.toLowerCase().includes(search));
-    return matchesStatus && matchesSearch;
-  });
+  const identities = await identityRepository.list({ status: filter.status });
+  return identities.filter((identity) => !search
+    || identity.displayName.toLowerCase().includes(search)
+    || identity.walletAddress.toLowerCase().includes(search)
+    || identity.roles.some((role) => role.toLowerCase().includes(search)));
 }
 
-export function getIdentity(identityId: string) {
-  const identity = identities.get(identityId);
-  if (!identity) {
-    throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
-  }
+export async function getIdentity(identityId: string) {
+  const identity = await identityRepository.findById(identityId);
+  if (!identity) throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
   return identity;
 }
 
-export function getIdentityByWallet(walletAddress: string) {
-  return findByWallet(walletAddress);
+export async function getIdentityByWallet(walletAddress: string) {
+  return identityRepository.findByWallet(normalizeWalletAddress(walletAddress));
 }
 
-export function updateIdentityProfile(identityId: string, displayName: string) {
-  const identity = getIdentity(identityId);
+export async function updateIdentityProfile(identityId: string, displayName: string) {
   const normalizedDisplayName = displayName.trim();
-  if (!normalizedDisplayName) {
-    throw new AppError("Display name is required.", 400, "IDENTITY_INVALID_DISPLAY_NAME");
-  }
-
-  const updatedIdentity = { ...identity, displayName: normalizedDisplayName, updatedAt: new Date().toISOString() };
-  identities.set(identityId, updatedIdentity);
-  return updatedIdentity;
+  if (!normalizedDisplayName) throw new AppError("Display name is required.", 400, "IDENTITY_INVALID_DISPLAY_NAME");
+  const identity = await identityRepository.update(identityId, { displayName: normalizedDisplayName });
+  if (!identity) throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
+  return identity;
 }
 
-export function updateIdentityStatus(identityId: string, status: IdentityStatus) {
-  const identity = getIdentity(identityId);
-  const updatedIdentity = { ...identity, status, updatedAt: new Date().toISOString() };
-  identities.set(identityId, updatedIdentity);
-  if (status === "REVOKED") {
-    revokeSessionsForIdentity(identityId);
-  }
-  return updatedIdentity;
+export async function updateIdentityStatus(identityId: string, status: IdentityStatus) {
+  const identity = await identityRepository.update(identityId, { status });
+  if (!identity) throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
+  if (status === "REVOKED") await revokeSessionsForIdentity(identityId);
+  return identity;
 }
 
-export function clearIdentityStore() {
-  identities.clear();
+export async function clearIdentityStore() {
+  if (process.env.NODE_ENV !== "test") throw new AppError("Identity store clearing is only available in tests.", 403, "TEST_ONLY_OPERATION");
+  await identityRepository.clear();
 }
 
-export function assignRole(identityId: string, role: string) {
-  const identity = getIdentity(identityId);
+export async function assignRole(identityId: string, role: string) {
+  const identity = await getIdentity(identityId);
   const normalizedRole = role.trim();
-  if (!normalizedRole) {
-    throw new AppError("Role is required.", 400, "IDENTITY_INVALID_ROLE");
-  }
-
-  if (identity.roles.includes(normalizedRole)) {
-    return identity;
-  }
-
-  const updatedIdentity = { ...identity, roles: [...identity.roles, normalizedRole], updatedAt: new Date().toISOString() };
-  identities.set(identityId, updatedIdentity);
-  return updatedIdentity;
+  if (!normalizedRole) throw new AppError("Role is required.", 400, "IDENTITY_INVALID_ROLE");
+  if (identity.roles.includes(normalizedRole)) return identity;
+  const updated = await identityRepository.update(identityId, { roles: [...identity.roles, normalizedRole] });
+  if (!updated) throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
+  return updated;
 }
 
-export function removeRole(identityId: string, role: string) {
-  const identity = getIdentity(identityId);
-  const updatedIdentity = {
-    ...identity,
-    roles: identity.roles.filter((assignedRole) => assignedRole !== role.trim()),
-    updatedAt: new Date().toISOString(),
-  };
-  identities.set(identityId, updatedIdentity);
-  return updatedIdentity;
+export async function removeRole(identityId: string, role: string) {
+  const identity = await getIdentity(identityId);
+  const updated = await identityRepository.update(identityId, { roles: identity.roles.filter((assignedRole) => assignedRole !== role.trim()) });
+  if (!updated) throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
+  return updated;
 }

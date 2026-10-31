@@ -20,9 +20,9 @@ const deviceSchema = z.object({
 export const deviceRouter = Router();
 deviceRouter.use(authenticateRequest);
 
-deviceRouter.post("/", validateBody(deviceSchema), createDeviceController);
-deviceRouter.get("/", listDevicesController);
+deviceRouter.post("/", validateBody(deviceSchema), asyncHandler(createDeviceController));
+deviceRouter.get("/", asyncHandler(listDevicesController));
 deviceRouter.patch("/:deviceId/revoke", asyncHandler(revokeDeviceController));
 deviceRouter.post("/:deviceId/replace", validateBody(deviceSchema), asyncHandler(replaceDeviceController));
-deviceRouter.post("/:deviceId/heartbeat", heartbeatDeviceController);
-deviceRouter.post("/:deviceId/bind", bindDeviceController);
+deviceRouter.post("/:deviceId/heartbeat", asyncHandler(heartbeatDeviceController));
+deviceRouter.post("/:deviceId/bind", asyncHandler(bindDeviceController));

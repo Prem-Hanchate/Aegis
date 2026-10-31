@@ -13,14 +13,14 @@ import {
 import { attachDeviceToSession } from "../services/session.service.js";
 import { submitBlockchainWrite } from "../services/blockchain.service.js";
 
-export function createDeviceController(request: Request, response: Response) {
+export async function createDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   const { name, fingerprint } = request.body as { name: string; fingerprint: string };
-  const device = enrollDevice(auth.identityId, auth.sessionId, name, fingerprint);
+  const device = await enrollDevice(auth.identityId, auth.sessionId, name, fingerprint);
   return response.status(201).json({ device });
 }
 
-export function listDevicesController(request: Request, response: Response) {
+export async function listDevicesController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   const status = request.query.status;
   const seenSince = request.query.seenSince;
@@ -39,7 +39,7 @@ export function listDevicesController(request: Request, response: Response) {
   }
 
   return response.status(200).json({
-    devices: listDevicesForIdentityWithFilter(auth.identityId, { status: parsedStatus, seenSince: parsedSeenSince }),
+    devices: await listDevicesForIdentityWithFilter(auth.identityId, { status: parsedStatus, seenSince: parsedSeenSince }),
   });
 }
 
@@ -47,9 +47,9 @@ export async function revokeDeviceController(request: Request, response: Respons
   const { auth } = requireAuthenticatedRequest(request);
   const deviceId = getDeviceId(request);
   // Verify device exists, is owned by caller, and is active before executing revocation
-  getActiveDevice(deviceId, auth.identityId);
+  await getActiveDevice(deviceId, auth.identityId);
   const transaction = await submitBlockchainWrite((client) => client.revokeDevice(deviceId));
-  return response.status(200).json({ device: revokeDevice(deviceId, auth.identityId), transaction });
+  return response.status(200).json({ device: await revokeDevice(deviceId, auth.identityId), transaction });
 }
 
 export async function replaceDeviceController(request: Request, response: Response) {
@@ -57,18 +57,18 @@ export async function replaceDeviceController(request: Request, response: Respon
   const oldDeviceId = getDeviceId(request);
   const { name, fingerprint } = request.body as { name: string; fingerprint: string };
   // Verify old device exists, is owned by caller, and is active before executing replacement
-  getActiveDevice(oldDeviceId, auth.identityId);
+  await getActiveDevice(oldDeviceId, auth.identityId);
   const transaction = await submitBlockchainWrite((client) => client.revokeDevice(oldDeviceId));
-  const device = replaceDevice(oldDeviceId, auth.identityId, auth.sessionId, name, fingerprint);
+  const device = await replaceDevice(oldDeviceId, auth.identityId, auth.sessionId, name, fingerprint);
   return response.status(201).json({ device, transaction });
 }
 
-export function bindDeviceController(request: Request, response: Response) {
+export async function bindDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   const deviceId = getDeviceId(request);
   // Only valid active devices owned by the authenticated identity can be bound to the session
-  const device = getActiveDevice(deviceId, auth.identityId);
-  attachDeviceToSession(auth.sessionId, device.deviceId);
+  const device = await getActiveDevice(deviceId, auth.identityId);
+  await attachDeviceToSession(auth.sessionId, device.deviceId);
   return response.status(200).json({ device, message: "Device bound to session successfully." });
 }
 
@@ -80,7 +80,7 @@ function getDeviceId(request: Request) {
   return deviceId;
 }
 
-export function heartbeatDeviceController(request: Request, response: Response) {
+export async function heartbeatDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
-  return response.status(200).json({ device: touchDevice(getDeviceId(request), auth.identityId) });
+  return response.status(200).json({ device: await touchDevice(getDeviceId(request), auth.identityId) });
 }
