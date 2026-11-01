@@ -35,6 +35,11 @@ export function blockchainRoleId(role: string) {
   return keccak256(toUtf8Bytes(`AegisRole:v1:${role}`));
 }
 
+export function blockchainDeviceId(deviceId: string) {
+  if (!deviceId.trim()) throw new Error("deviceId must not be empty.");
+  return isHexString(deviceId, 32) ? deviceId : keccak256(toUtf8Bytes(`AegisDevice:v1:${deviceId}`));
+}
+
 export function blockchainPermissionId(resource: string, action: string) {
   if (!resource.trim() || !action.trim()) throw new Error("resource and action must not be empty.");
   return keccak256(toUtf8Bytes(`AegisPermission:v1:${resource}:${action}`));
@@ -89,6 +94,58 @@ export class BlockchainClient {
       }
     }
     return new BlockchainClient(provider, config, createBlockchainContracts(provider, config), signer);
+  }
+
+  getProvider(): JsonRpcProvider {
+    return this.provider;
+  }
+
+  getConfig(): BlockchainConfig {
+    return this.config;
+  }
+
+  getContracts() {
+    return this.contracts;
+  }
+
+  getSigner(): NonceManager | null {
+    return this.signer;
+  }
+
+  async verifyTransactionReceipt(txHash: string, confirmations = this.config.confirmations ?? 1) {
+    if (!isHexString(txHash, 32)) {
+      throw new Error("txHash must be a 32-byte hexadecimal string.");
+    }
+    const receipt = await this.provider.waitForTransaction(txHash);
+    if (!receipt) {
+      return { verified: false, receipt: null, reason: "Receipt not found" };
+    }
+    if (receipt.status !== 1) {
+      return { verified: false, receipt, reason: "Transaction reverted" };
+    }
+    const currentBlock = await this.provider.getBlockNumber();
+    const confirmedCount = currentBlock - receipt.blockNumber + 1;
+    if (confirmedCount < confirmations) {
+      return {
+        verified: false,
+        receipt,
+        confirmations: confirmedCount,
+        requiredConfirmations: confirmations,
+        reason: "Insufficient confirmations",
+      };
+    }
+    return {
+      verified: true,
+      receipt,
+      confirmations: confirmedCount,
+      requiredConfirmations: confirmations,
+    };
+  }
+
+  async revokePermission(permissionId: string) {
+    return this.send("RevocationRegistry.revokePermission", this.contracts.revocationRegistry, "revokePermission", [
+      requireBytes32(permissionId, "permissionId"),
+    ]);
   }
 
   private async send(operation: string, contract: Contract, method: string, args: readonly unknown[]) {
@@ -218,6 +275,24 @@ export class BlockchainClient {
   async isPermissionRevoked(permissionId: string) {
     return this.contractCall("RevocationRegistry.isPermissionRevoked", () =>
       this.contracts.revocationRegistry.getFunction("isPermissionRevoked")(requireBytes32(permissionId, "permissionId")),
+    );
+  }
+
+  async hasPermissionForRole(roleId: string, permissionId: string): Promise<boolean> {
+    return this.contractCall("PolicyRegistry.hasPermissionForRole", () =>
+      this.contracts.policyRegistry.getFunction("hasPermissionForRole")(
+        requireBytes32(roleId, "roleId"),
+        requireBytes32(permissionId, "permissionId"),
+      ),
+    );
+  }
+
+  async version(): Promise<string> {
+    if (!this.contracts.aegisRegistry) {
+      return "unknown";
+    }
+    return this.contractCall("AegisRegistry.version", () =>
+      this.contracts.aegisRegistry!.getFunction("version")(),
     );
   }
 

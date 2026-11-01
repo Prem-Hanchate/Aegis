@@ -87,6 +87,14 @@ export class SessionRepository {
     return result.modifiedCount;
   }
 
+  async revokeByDevice(deviceId: string, revokedAt: Date = new Date()): Promise<number> {
+    const result = await SessionModel.updateMany(
+      { deviceId, status: "ACTIVE" },
+      { $set: { status: "REVOKED", revokedAt } },
+    ).exec();
+    return result.modifiedCount;
+  }
+
   async listActiveByIdentity(identityId: string): Promise<SessionEntity[]> {
     const docs = await SessionModel.find({ identityId, status: "ACTIVE" }).lean().exec();
     return docs.map(toEntity);

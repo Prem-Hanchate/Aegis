@@ -28,6 +28,10 @@ async function getClient() {
   }
 }
 
+export async function getBlockchainClient(): Promise<BlockchainClient | null> {
+  return getClient();
+}
+
 export async function submitBlockchainWrite<T>(write: (client: BlockchainClient) => Promise<T>) {
   const client = await getClient();
   if (!client) return null;

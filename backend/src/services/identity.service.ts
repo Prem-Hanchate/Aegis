@@ -43,7 +43,11 @@ export function assertIdentityRegistrationAvailable(walletAddress: string) {
   }
 }
 
-export function registerIdentity(walletAddress: string, displayName: string, identityId = randomUUID()): Identity {
+export function registerIdentity(
+  walletAddress: string,
+  displayName: string,
+  identityId: string = randomUUID(),
+): Identity {
   const normalizedWalletAddress = normalizeWalletAddress(walletAddress);
   assertIdentityRegistrationAvailable(normalizedWalletAddress);
 

@@ -96,6 +96,17 @@ export class DeviceRepository {
     return doc ? toEntity(doc) : null;
   }
 
+  async revokeDirect(deviceId: string, revokedAt: Date = new Date()): Promise<DeviceEntity | null> {
+    const doc = await DeviceModel.findOneAndUpdate(
+      { deviceId, status: "ACTIVE" },
+      { $set: { status: "REVOKED", revokedAt } },
+      { new: true },
+    )
+      .lean()
+      .exec();
+    return doc ? toEntity(doc) : null;
+  }
+
   async touch(deviceId: string, identityId: string, now: Date = new Date()): Promise<DeviceEntity | null> {
     const doc = await DeviceModel.findOneAndUpdate(
       { deviceId, identityId, status: "ACTIVE" },

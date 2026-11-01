@@ -192,6 +192,33 @@ export async function revokeSessionsForIdentityAsync(identityId: string, now = n
   return 0;
 }
 
+export function revokeSessionsForDevice(deviceId: string, now = new Date()): void {
+  for (const session of sessions.values()) {
+    if (session.deviceId === deviceId && session.status === "ACTIVE") {
+      sessions.set(session.sessionId, { ...session, status: "REVOKED", revokedAt: now.toISOString() });
+    }
+  }
+
+  if (isDbConnected()) {
+    void sessionRepository.revokeByDevice(deviceId, now).catch((err) => {
+      console.error("Failed to revoke sessions for device in MongoDB:", err);
+    });
+  }
+}
+
+export async function revokeSessionsForDeviceAsync(deviceId: string, now = new Date()): Promise<number> {
+  for (const session of sessions.values()) {
+    if (session.deviceId === deviceId && session.status === "ACTIVE") {
+      sessions.set(session.sessionId, { ...session, status: "REVOKED", revokedAt: now.toISOString() });
+    }
+  }
+
+  if (isDbConnected()) {
+    return await sessionRepository.revokeByDevice(deviceId, now);
+  }
+  return 0;
+}
+
 export function resetSessionMemoryStore(): void {
   sessions.clear();
 }

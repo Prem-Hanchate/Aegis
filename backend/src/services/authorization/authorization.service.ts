@@ -4,6 +4,7 @@ import type { RequestHandler } from "express";
 import { getIdentity } from "../identity.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
 import { policyRepository } from "../../repositories/policy.repository.js";
+import { IdentityModel } from "../../models/index.js";
 
 const rolePermissions: Record<string, Set<string>> = {
   employee: new Set(["employee:read", "reports:read"]),
@@ -35,6 +36,40 @@ export function authorizeRequest(identityId: string, resource: string, action: s
   }
 
   return { allowed: true, identityId, resource, action };
+}
+
+export async function authorizeRequestAsync(identityId: string, resource: string, action: string) {
+  if (isDbConnected()) {
+    const identityDoc = await IdentityModel.findOne({ identityId }).lean().exec();
+    if (!identityDoc) {
+      throw new AppError("Identity not found.", 404, "IDENTITY_NOT_FOUND");
+    }
+    const permission = `${resource}:${action}`;
+    const policies = await policyRepository.listAll();
+    const allowed =
+      identityDoc.status === "ACTIVE" &&
+      identityDoc.roles.some((role) => {
+        const policy = policies.find((p) => p.role === role);
+        return policy?.permissions.includes(permission);
+      });
+
+    recordAuditEvent({
+      eventType: "ACCESS_DECISION",
+      identityId,
+      resource,
+      action,
+      outcome: allowed ? "ALLOWED" : "DENIED",
+      reason: allowed ? null : "No active role grants this permission.",
+      actor: identityDoc.walletAddress,
+    });
+
+    if (!allowed) {
+      throw new AppError("Access denied.", 403, "AUTHORIZATION_DENIED", { resource, action });
+    }
+
+    return { allowed: true, identityId, resource, action };
+  }
+  return authorizeRequest(identityId, resource, action);
 }
 
 export function requireAuthorization(resource: string, action: string) {

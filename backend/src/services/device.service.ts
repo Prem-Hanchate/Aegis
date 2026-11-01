@@ -198,6 +198,40 @@ export async function revokeDeviceAsync(deviceId: string, identityId: string, no
   return revokedDevice;
 }
 
+export function revokeDeviceDirect(deviceId: string, now = new Date()): Device | null {
+  const device = devices.get(deviceId);
+  if (device) {
+    const revokedDevice: Device = { ...device, status: "REVOKED" as const, revokedAt: now.toISOString() };
+    devices.set(deviceId, revokedDevice);
+  }
+
+  if (isDbConnected()) {
+    void deviceRepository.revokeDirect(deviceId, now).catch((err) => {
+      console.error("Failed to directly revoke device in MongoDB:", err);
+    });
+  }
+
+  return device ? { ...device, status: "REVOKED" as const, revokedAt: now.toISOString() } : null;
+}
+
+export async function revokeDeviceDirectAsync(deviceId: string, now = new Date()): Promise<Device | null> {
+  let device = devices.get(deviceId) ?? null;
+  if (isDbConnected()) {
+    const updated = await deviceRepository.revokeDirect(deviceId, now);
+    if (updated) {
+      devices.set(updated.deviceId, updated);
+      return updated;
+    }
+  }
+
+  if (device) {
+    const revokedDevice: Device = { ...device, status: "REVOKED" as const, revokedAt: now.toISOString() };
+    devices.set(deviceId, revokedDevice);
+    return revokedDevice;
+  }
+  return null;
+}
+
 export function replaceDevice(deviceId: string, identityId: string, sessionId: string, name: string, fingerprint: string): Device {
   revokeDevice(deviceId, identityId);
   return enrollDevice(identityId, sessionId, name, fingerprint, new Date(), deviceId);
