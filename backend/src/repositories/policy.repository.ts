@@ -32,8 +32,10 @@ export class PolicyRepository {
         {
           $setOnInsert: {
             role,
-            permissions,
             assignedIdentities: [],
+          },
+          $addToSet: {
+            permissions: { $each: permissions },
           },
         },
         { upsert: true, new: true },
