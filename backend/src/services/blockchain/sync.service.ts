@@ -251,11 +251,22 @@ export class BlockchainSyncService {
         if (walletAddress && isDbConnected()) {
           const existing = await IdentityModel.findOne({ walletAddress });
           if (!existing) {
-            // Can be pre-created or mapped
             console.log(`[BlockchainSync] Identity registered on-chain for wallet ${walletAddress}`);
+            const allInMemory = listIdentities();
+            const matched = allInMemory.find((id) => blockchainIdentityId(id.identityId) === args.identityId || id.walletAddress === walletAddress);
+            const actualId = matched?.identityId ?? args.identityId;
+            const displayName = matched?.displayName ?? `Identity-${walletAddress.slice(0, 8)}`;
+            await IdentityModel.create({
+              identityId: actualId,
+              walletAddress,
+              displayName,
+              status: "ACTIVE",
+              roles: [],
+            }).catch(() => {});
           }
         }
         break;
+      }
       }
 
       case "IdentityActivated": {
