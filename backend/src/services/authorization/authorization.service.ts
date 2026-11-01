@@ -12,8 +12,37 @@ const rolePermissions: Record<string, Set<string>> = {
   admin: new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]),
 };
 
+const supportedPermissions = new Set([
+  "employee:read",
+  "reports:read",
+  "payroll:read",
+  "policies:manage",
+]);
+
 function isDbConnected(): boolean {
   return mongoose.connection.readyState === 1;
+}
+
+export function assertSupportedPolicy(role: string, resource: string, action: string) {
+  const normalizedRole = role.trim();
+  const permission = `${resource.trim()}:${action.trim()}`;
+  if (!Object.hasOwn(rolePermissions, normalizedRole)) {
+    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
+  }
+  if (!supportedPermissions.has(permission)) {
+    throw new AppError("Permission is not supported.", 400, "POLICY_PERMISSION_NOT_SUPPORTED");
+  }
+  return { role: normalizedRole, permission };
+}
+
+export function getPermissionsForRoles(roles: string[]) {
+  return [...new Set(roles.flatMap((role) => [...(rolePermissions[role] ?? [])]))];
+}
+
+export function hasPermission(identityId: string, resource: string, action: string) {
+  const identity = getIdentity(identityId);
+  const permission = `${resource.trim()}:${action.trim()}`;
+  return identity.status === "ACTIVE" && identity.roles.some((role) => rolePermissions[role]?.has(permission));
 }
 
 export function authorizeRequest(identityId: string, resource: string, action: string) {
