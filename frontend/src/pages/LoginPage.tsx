@@ -102,7 +102,7 @@ export function LoginPage() {
       const { identity, session } = verificationResponse.result;
 
       // Establish authenticated session in memory
-      setSession(identity, session, identity.roles);
+      setSession(identity, session, identity.roles, null, identity.permissions ?? []);
 
       const destination = (location.state as { from?: string } | undefined)?.from ?? "/";
       navigate(destination, { replace: true });

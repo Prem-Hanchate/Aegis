@@ -59,6 +59,7 @@ export function fetchBackendHealth(): Promise<BackendHealthResponse> {
 
 export interface ResourceAccessResponse {
   resource: string;
+  identityId: string;
   data: string;
 }
 
@@ -156,6 +157,11 @@ export interface ManagedIdentity {
   status: "ACTIVE" | "REVOKED";
   roles: string[];
   createdAt: string;
+  updatedAt?: string;
+}
+
+export function fetchIdentity(accessToken: string, identityId: string): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}`, accessToken);
 }
 
 export interface PolicyMap {
@@ -165,16 +171,24 @@ export interface PolicyMap {
 export interface AuditEvent {
   eventId: string;
   eventType: string;
-  identityId: string;
-  resource: string;
-  action: string;
+  identityId: string | null;
+  resource: string | null;
+  action: string | null;
   outcome: string;
   reason: string | null;
+  actor: string | null;
   timestamp: string;
 }
 
-export function fetchIdentities(accessToken: string): Promise<{ identities: ManagedIdentity[] }> {
-  return requestProtectedJson<{ identities: ManagedIdentity[] }>("/identities", accessToken);
+export function fetchIdentities(
+  accessToken: string,
+  filters: { search?: string; status?: "ACTIVE" | "REVOKED" } = {},
+): Promise<{ identities: ManagedIdentity[] }> {
+  const query = new URLSearchParams();
+  if (filters.search) query.set("search", filters.search);
+  if (filters.status) query.set("status", filters.status);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestProtectedJson<{ identities: ManagedIdentity[] }>(`/identities${suffix}`, accessToken);
 }
 
 export function registerIdentity(
@@ -198,6 +212,39 @@ export function updateIdentityStatus(
   });
 }
 
+export function updateIdentityProfile(
+  accessToken: string,
+  identityId: string,
+  displayName: string,
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/profile`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ displayName }),
+  });
+}
+
+export function assignIdentityRole(
+  accessToken: string,
+  identityId: string,
+  role: string,
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/roles`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export function removeIdentityRole(
+  accessToken: string,
+  identityId: string,
+  role: string,
+): Promise<{ identity: ManagedIdentity }> {
+  return requestProtectedJson<{ identity: ManagedIdentity }>(`/identities/${identityId}/roles`, accessToken, {
+    method: "DELETE",
+    body: JSON.stringify({ role }),
+  });
+}
+
 export function fetchPolicies(accessToken: string): Promise<{ policies: PolicyMap }> {
   return requestProtectedJson<{ policies: PolicyMap }>("/policies", accessToken);
 }
@@ -205,18 +252,34 @@ export function fetchPolicies(accessToken: string): Promise<{ policies: PolicyMa
 export function grantPolicy(
   accessToken: string,
   payload: { role: string; resource: string; action: string },
-): Promise<unknown> {
-  return requestProtectedJson("/policies/permissions", accessToken, {
+): Promise<{ policy: { role: string; permissions: string[] }; transaction?: unknown }> {
+  return requestProtectedJson<{ policy: { role: string; permissions: string[] }; transaction?: unknown }>("/policies/permissions", accessToken, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
+export function revokePolicy(
+  accessToken: string,
+  role: string,
+  payload: { resource: string; action: string },
+): Promise<{ policy: { role: string; permissions: string[] }; transaction?: unknown }> {
+  return requestProtectedJson<{ policy: { role: string; permissions: string[] }; transaction?: unknown }>(
+    `/policies/${encodeURIComponent(role)}/permissions`,
+    accessToken,
+    {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export function fetchAudit(
   accessToken: string,
-  filters: { outcome?: string; eventType?: string; offset?: number; limit?: number } = {},
+  filters: { identityId?: string; outcome?: string; eventType?: string; offset?: number; limit?: number } = {},
 ): Promise<{ total: number; events: AuditEvent[] }> {
   const query = new URLSearchParams({ limit: String(filters.limit ?? 10), offset: String(filters.offset ?? 0) });
+  if (filters.identityId) query.set("identityId", filters.identityId);
   if (filters.outcome) query.set("outcome", filters.outcome);
   if (filters.eventType) query.set("eventType", filters.eventType);
   return requestProtectedJson<{ total: number; events: AuditEvent[] }>(`/audit?${query.toString()}`, accessToken);

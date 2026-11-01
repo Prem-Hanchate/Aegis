@@ -1,17 +1,24 @@
 import type { Request, Response } from "express";
 import { issueLoginChallenge, verifyLoginChallenge } from "../services/auth/auth.service.js";
 import { revokeSession } from "../services/session.service.js";
-import { requireAuthenticatedRequest } from "../middleware/authentication.js";
+import { recordAuthenticationFailure, requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { revokeAllSessionsForIdentity } from "../services/session.service.js";
 import { getIdentity } from "../services/identity.service.js";
+import { getPermissionsForRoles } from "../services/authorization/authorization.service.js";
+import type { AuthVerificationResult } from "../services/auth/challenge.types.js";
 
 export function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
-  const challenge = issueLoginChallenge(walletAddress);
+  try {
+    const challenge = issueLoginChallenge(walletAddress);
 
-  return response.status(201).json({
-    challenge,
-  });
+    return response.status(201).json({
+      challenge,
+    });
+  } catch (error) {
+    recordAuthenticationFailure(request, error instanceof Error ? error.message : "Challenge issuance failed.");
+    throw error;
+  }
 }
 
 export function verifyLoginChallengeController(request: Request, response: Response) {
@@ -21,7 +28,13 @@ export function verifyLoginChallengeController(request: Request, response: Respo
     signature: string;
   };
 
-  const result = verifyLoginChallenge(walletAddress, message, signature);
+  let result: AuthVerificationResult;
+  try {
+    result = verifyLoginChallenge(walletAddress, message, signature);
+  } catch (error) {
+    recordAuthenticationFailure(request, error instanceof Error ? error.message : "Challenge verification failed.");
+    throw error;
+  }
 
   return response.status(200).json({
     status: "authenticated",
@@ -46,7 +59,10 @@ export function currentSessionController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   return response.status(200).json({
     session: auth,
-    identity: getIdentity(auth.identityId),
+    identity: {
+      ...getIdentity(auth.identityId),
+      permissions: getPermissionsForRoles(auth.roles),
+    },
   });
 }
 

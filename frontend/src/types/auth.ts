@@ -18,6 +18,7 @@ export interface AuthIdentityRecord {
   displayName: string;
   status: "ACTIVE" | "REVOKED";
   roles: string[];
+  permissions?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

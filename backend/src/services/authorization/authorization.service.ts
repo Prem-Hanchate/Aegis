@@ -6,6 +6,12 @@ import { recordAuditEvent } from "../audit/audit.service.js";
 import { policyRepository } from "../../repositories/policy.repository.js";
 import { IdentityModel } from "../../models/index.js";
 
+const defaultRolePermissions: Record<string, string[]> = {
+  employee: ["employee:read", "reports:read"],
+  manager: ["employee:read", "reports:read", "payroll:read"],
+  admin: ["employee:read", "reports:read", "payroll:read", "policies:manage"],
+};
+
 const rolePermissions: Record<string, Set<string>> = {
   employee: new Set(["employee:read", "reports:read"]),
   manager: new Set(["employee:read", "reports:read", "payroll:read"]),
@@ -40,15 +46,23 @@ export function getPermissionsForRoles(roles: string[]) {
 }
 
 export function hasPermission(identityId: string, resource: string, action: string) {
+
   const identity = getIdentity(identityId);
   const permission = `${resource.trim()}:${action.trim()}`;
   return identity.status === "ACTIVE" && identity.roles.some((role) => rolePermissions[role]?.has(permission));
 }
 
 export function authorizeRequest(identityId: string, resource: string, action: string) {
+
   const identity = getIdentity(identityId);
   const permission = `${resource}:${action}`;
-  const allowed = identity.status === "ACTIVE" && identity.roles.some((role) => rolePermissions[role]?.has(permission));
+  return identity.status === "ACTIVE"
+    && getPermissionsForRoles(identity.roles).includes(permission);
+}
+
+export function authorizeRequest(identityId: string, resource: string, action: string) {
+  const identity = getIdentity(identityId);
+  const allowed = hasPermission(identityId, resource, action);
 
   recordAuditEvent({
     eventType: "ACCESS_DECISION",
@@ -129,9 +143,13 @@ export function resetAuthorizationMemoryStore() {
 }
 
 export function clearAuthorizationState() {
-  for (const permissions of Object.values(rolePermissions)) {
-    permissions.clear();
+  for (const role of Object.keys(rolePermissions)) {
+    delete rolePermissions[role];
   }
+  for (const [role, permissions] of Object.entries(defaultRolePermissions)) {
+    rolePermissions[role] = new Set(permissions);
+  }
+
   rolePermissions.employee = new Set(["employee:read", "reports:read"]);
   rolePermissions.manager = new Set(["employee:read", "reports:read", "payroll:read"]);
   rolePermissions.admin = new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]);
@@ -146,6 +164,7 @@ export function clearAuthorizationState() {
 export function listRolePermissions() {
   return Object.fromEntries(Object.entries(rolePermissions).map(([role, permissions]) => [role, [...permissions]]));
 }
+
 
 export async function listRolePermissionsAsync() {
   if (isDbConnected()) {

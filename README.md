@@ -124,3 +124,38 @@ npm run build
 - **Protected Resources**:
   - `GET /api/resources/:resource`: Policy-evaluated resource access (`employee`, `reports`, `payroll`), requiring both valid role permissions and an active bound device.
 
+## Identity Administration
+
+Identity administration is available at `/identities` to authenticated users with the effective
+`policies:manage` permission. The interface supports wallet-validated registration, directory
+search/status filters, identity details, profile updates, activation, revocation, and role
+assignment/removal. Revocation invalidates active sessions and prevents subsequent wallet
+authentication.
+
+Identity management endpoints are administrative server-side operations. Identity creation and
+wallet lookup are not public endpoints; ordinary users cannot use them or change roles. Administrators
+cannot change their own roles, preventing self-escalation. Optional blockchain writes complete before
+local identity state changes; blockchain failures are returned to the caller rather than silently
+being treated as successful local-only mutations.
+
+For a fresh local in-memory environment, set `BOOTSTRAP_ADMIN_WALLET` before starting the
+backend. The server will register that wallet as an `admin` identity once at startup, allowing
+the first MetaMask login. This is an explicit development convenience; use a controlled wallet
+and do not configure a shared bootstrap wallet in production.
+If that configured development identity was revoked, restarting the backend reactivates it as
+part of the same explicit local bootstrap recovery.
+
+## Policy Management and Protected Resources
+
+The `/policies` screen shows the live permission map for the supported `employee`, `manager`, and
+`admin` roles. Users need the effective `policies:manage` permission to view or mutate policies.
+Granting or revoking a permission explains that the change affects every identity with the role;
+revocation requires an explicit confirmation. Policy responses include an optional blockchain
+transaction result when blockchain administration is configured.
+
+The Employee, Reports, and Payroll navigation links are shown according to the current effective
+permissions, but every resource request is still authorized by the backend using the active
+identity, session, enrolled device, role, permission, resource, and action. The resource screens
+display the real API response and distinguish backend authorization failures from network failures.
+Policy changes are evaluated on every request, so revocations take effect without waiting for a
+stale permission snapshot.

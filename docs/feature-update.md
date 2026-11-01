@@ -51,8 +51,9 @@ The blockchain stores trusted state and audit proofs. Normal access decisions ar
 | Blockchain client and event sync | Pending | No backend contract client, listeners, cache, or reconciliation |
 | Zero Trust authorization engine | Partial | Session, identity, role, resource, and action checks exist; device, network, and policy storage are pending |
 | Device enrollment/replacement/revocation | Done | End-to-end device lifecycle with server-side ownership, session binding, and Zero Trust resource protection |
-| Audit logging | Partial | Access and policy decisions are recorded and admin-readable in memory; persistence and anchoring are pending |
-| Admin dashboard | Pending | No identity, policy, role, permission, device, or audit management screens |
+| Audit logging | Partial | Authentication failures, access decisions, policy changes, and selected administrative actions are recorded and admin-readable in memory; persistence and anchoring are pending |
+| Security audit dashboard | Done for initial slice | Authorized administrators can review live summary metrics and paginated, filterable audit events; the dashboard does not prove durable or tamper-proof history |
+| Admin dashboard | Partial | Identity, policy, role, permission, device, and audit management screens exist; audit storage and end-to-end workflow remain incomplete |
 | End-to-end MVP demo | Pending | Full admin-to-user resource authorization flow is not connected |
 
 ## 3. Work Completed Now

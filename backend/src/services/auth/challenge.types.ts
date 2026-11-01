@@ -29,6 +29,7 @@ export interface AuthVerificationResult {
     displayName: string;
     status: "ACTIVE" | "REVOKED";
     roles: string[];
+    permissions: string[];
   };
   session: {
     sessionId: string;
