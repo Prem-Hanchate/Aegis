@@ -17,8 +17,15 @@ export function loadArtifact(contractName: string): HardhatArtifact {
   return JSON.parse(readFileSync(fileURLToPath(artifactUrl), "utf8")) as HardhatArtifact;
 }
 
-export function createBlockchainContracts(provider: ContractRunner, config: BlockchainConfig) {
-  return {
+export interface BlockchainContracts {
+  identityRegistry: Contract;
+  policyRegistry: Contract;
+  revocationRegistry: Contract;
+  aegisRegistry?: Contract;
+}
+
+export function createBlockchainContracts(provider: ContractRunner, config: BlockchainConfig): BlockchainContracts {
+  const contracts: BlockchainContracts = {
     identityRegistry: new Contract(
       config.identityRegistryAddress,
       loadArtifact("IdentityRegistry").abi,
@@ -31,4 +38,10 @@ export function createBlockchainContracts(provider: ContractRunner, config: Bloc
       provider,
     ),
   };
+
+  if (config.aegisRegistryAddress) {
+    contracts.aegisRegistry = new Contract(config.aegisRegistryAddress, loadArtifact("AegisRegistry").abi, provider);
+  }
+
+  return contracts;
 }

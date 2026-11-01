@@ -19,3 +19,4 @@ frontend/dist
 backend/dist
 contracts/artifacts
 contracts/cache
+.tmp_appdata

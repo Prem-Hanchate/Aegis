@@ -6,6 +6,7 @@ export interface BlockchainConfig {
   identityRegistryAddress: string;
   policyRegistryAddress: string;
   revocationRegistryAddress: string;
+  aegisRegistryAddress?: string;
   signerPrivateKey?: string;
   confirmations?: number;
 }
@@ -59,6 +60,7 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
     identityRegistryAddress: parseAddress(source, "IDENTITY_REGISTRY_ADDRESS"),
     policyRegistryAddress: parseAddress(source, "POLICY_REGISTRY_ADDRESS"),
     revocationRegistryAddress: parseAddress(source, "REVOCATION_REGISTRY_ADDRESS"),
+    aegisRegistryAddress: source.AEGIS_REGISTRY_ADDRESS?.trim() ? parseAddress(source, "AEGIS_REGISTRY_ADDRESS") : undefined,
     signerPrivateKey: source.BACKEND_SIGNER_PRIVATE_KEY?.trim() || undefined,
     confirmations: Number(confirmationsValue),
   };
@@ -66,5 +68,5 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
 
 export function hasBlockchainConfiguration(source: NodeJS.ProcessEnv = process.env) {
   return ["RPC_URL", "CHAIN_ID", "IDENTITY_REGISTRY_ADDRESS", "POLICY_REGISTRY_ADDRESS", "REVOCATION_REGISTRY_ADDRESS"]
-    .some((name) => Boolean(source[name]?.trim()));
+    .every((name) => Boolean(source[name]?.trim()));
 }

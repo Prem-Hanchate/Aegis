@@ -1,14 +1,9 @@
-import { model, Schema, type InferSchemaType } from "mongoose";
-
-const identitySchema = new Schema(
-	{
-		walletAddress: { type: String, required: true, unique: true, index: true },
-		displayName: { type: String, required: true, trim: true },
-		status: { type: String, enum: ["ACTIVE", "REVOKED"], default: "ACTIVE" },
-		roles: { type: [String], default: [] },
-	},
-	{ timestamps: true },
-);
-
-export type IdentityDocument = InferSchemaType<typeof identitySchema> & { _id: string };
-export const IdentityModel = model("Identity", identitySchema);
+export * from "./identity.model.js";
+export * from "./session.model.js";
+export * from "./challenge.model.js";
+export * from "./device.model.js";
+export * from "./policy.model.js";
+export * from "./audit-log.model.js";
+export * from "./blockchain-sync-state.model.js";
+export * from "./blockchain-event.model.js";
+export * from "./reconciliation-record.model.js";
