@@ -53,14 +53,6 @@ export function hasPermission(identityId: string, resource: string, action: stri
 }
 
 export function authorizeRequest(identityId: string, resource: string, action: string) {
-
-  const identity = getIdentity(identityId);
-  const permission = `${resource}:${action}`;
-  return identity.status === "ACTIVE"
-    && getPermissionsForRoles(identity.roles).includes(permission);
-}
-
-export function authorizeRequest(identityId: string, resource: string, action: string) {
   const identity = getIdentity(identityId);
   const allowed = hasPermission(identityId, resource, action);
 

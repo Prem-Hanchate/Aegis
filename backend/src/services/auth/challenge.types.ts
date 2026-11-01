@@ -26,6 +26,7 @@ export interface AuthVerificationResult {
   domain: string;
   identity: {
     identityId: string;
+    walletAddress: string;
     displayName: string;
     status: "ACTIVE" | "REVOKED";
     roles: string[];

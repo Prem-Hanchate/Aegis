@@ -115,6 +115,7 @@ export function verifyLoginChallenge(
     domain: challenge.domain,
     identity: {
       identityId: identity.identityId,
+      walletAddress: identity.walletAddress,
       displayName: identity.displayName,
       status: identity.status,
       roles: identity.roles,
