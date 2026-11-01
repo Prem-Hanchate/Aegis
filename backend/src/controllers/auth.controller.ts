@@ -9,12 +9,8 @@ import type { AuthVerificationResult } from "../services/auth/challenge.types.js
 
 export async function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
-<<<<<<< HEAD
-  const challenge = await issueLoginChallenge(walletAddress);
-=======
   try {
     const challenge = issueLoginChallenge(walletAddress);
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 
     return response.status(201).json({
       challenge,
@@ -32,9 +28,6 @@ export async function verifyLoginChallengeController(request: Request, response:
     signature: string;
   };
 
-<<<<<<< HEAD
-  const result = await verifyLoginChallenge(walletAddress, message, signature);
-=======
   let result: AuthVerificationResult;
   try {
     result = verifyLoginChallenge(walletAddress, message, signature);
@@ -42,7 +35,6 @@ export async function verifyLoginChallengeController(request: Request, response:
     recordAuthenticationFailure(request, error instanceof Error ? error.message : "Challenge verification failed.");
     throw error;
   }
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 
   return response.status(200).json({
     status: "authenticated",

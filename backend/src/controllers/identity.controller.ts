@@ -38,7 +38,6 @@ export async function createIdentityController(request: Request, response: Respo
 =======
   const identity = registerIdentity(walletAddress, displayName, identityId);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: identity.identityId, resource: "identities", action: "register", outcome: "SUCCESS", reason: "Identity registered.", actor: auth.identityId });
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
   return response.status(201).json({ identity, transaction });
 }
 
@@ -59,13 +58,9 @@ export async function updateIdentityStatusController(request: Request, response:
   const transaction = status === "ACTIVE"
     ? await submitBlockchainWrite((client) => client.activateIdentity(identityId))
     : await submitBlockchainWrite((client) => client.revokeIdentity(identityId));
-<<<<<<< HEAD
-  return response.status(200).json({ identity: await updateIdentityStatus(identityId, status), transaction });
-=======
   const identity = updateIdentityStatus(identityId, status);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: status === "ACTIVE" ? "activate" : "revoke", outcome: "SUCCESS", reason: `Identity status changed to ${status}.`, actor: auth.identityId });
   return response.status(200).json({ identity, transaction });
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
 
 function getIdentityId(request: Request) {
@@ -84,13 +79,9 @@ export async function assignIdentityRoleController(request: Request, response: R
   }
   const { role } = request.body as { role: string };
   const transaction = await submitBlockchainWrite((client) => client.assignRole(identityId, role));
-<<<<<<< HEAD
-  return response.status(200).json({ identity: await assignRole(identityId, role), transaction });
-=======
   const identity = assignRole(identityId, role);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: "assign-role", outcome: "SUCCESS", reason: `Role ${role} assigned.`, actor: auth.identityId });
   return response.status(200).json({ identity, transaction });
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
 
 export async function removeIdentityRoleController(request: Request, response: Response) {
@@ -101,13 +92,9 @@ export async function removeIdentityRoleController(request: Request, response: R
   }
   const role = request.body.role as string;
   const transaction = await submitBlockchainWrite((client) => client.removeRole(identityId, role));
-<<<<<<< HEAD
-  return response.status(200).json({ identity: await removeRole(identityId, role), transaction });
-=======
   const identity = removeRole(identityId, role);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: "remove-role", outcome: "SUCCESS", reason: `Role ${role} removed.`, actor: auth.identityId });
   return response.status(200).json({ identity, transaction });
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
 
 export async function getIdentityByWalletController(request: Request, response: Response) {
@@ -136,5 +123,4 @@ export function updateIdentityProfileController(request: Request, response: Resp
   const identity = updateIdentityProfile(identityId, displayName);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: "update-profile", outcome: "SUCCESS", reason: "Identity profile updated.", actor: auth.identityId });
   return response.status(200).json({ identity });
->>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
