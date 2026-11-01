@@ -295,6 +295,12 @@ export class BlockchainSyncService {
         const roleName = knownRoles.get(args.roleId);
         if (identity && roleName) {
           await assignRoleAsync(identity.identityId, roleName);
+          // Reload in-memory permission store from MongoDB so any permissions
+          // already granted to this role are immediately visible.
+          if (isDbConnected()) {
+            const { rehydratePolicyStore } = await import("../authorization/authorization.service.js");
+            await rehydratePolicyStore();
+          }
         }
         break;
       }
