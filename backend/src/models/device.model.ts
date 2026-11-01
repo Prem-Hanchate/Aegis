@@ -1,3 +1,4 @@
+export const pendingDeviceCreations = new Map<string, Promise<any>>();
 import mongoose, { model, Schema, type InferSchemaType, type Model } from "mongoose";
 
 export const deviceSchema = new Schema(
@@ -63,6 +64,20 @@ deviceSchema.index({ identityId: 1, fingerprint: 1, status: 1 });
 deviceSchema.index({ identityId: 1, status: 1 });
 
 export type DeviceDocument = InferSchemaType<typeof deviceSchema> & { _id: unknown; name?: string };
+deviceSchema.pre('updateOne', async function() {
+  const filter = this.getFilter();
+  if (filter && filter.deviceId && pendingDeviceCreations.has(filter.deviceId)) {
+    await pendingDeviceCreations.get(filter.deviceId);
+  }
+});
+
+deviceSchema.pre('findOne', async function() {
+  const filter = this.getFilter();
+  if (filter && filter.deviceId && pendingDeviceCreations.has(filter.deviceId)) {
+    await pendingDeviceCreations.get(filter.deviceId);
+  }
+});
+
 export const DeviceModel: Model<DeviceDocument> =
   (mongoose.models?.Device as Model<DeviceDocument>) || model<DeviceDocument>("Device", deviceSchema);
 

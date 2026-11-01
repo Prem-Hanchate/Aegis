@@ -249,6 +249,17 @@ export function attachDeviceToSession(sessionId: string, deviceId: string): Sess
   return updatedSession;
 }
 
+export function bindSessionToDevice(sessionId: string, deviceId: string, identityId: string): Session {
+  const session = sessions.get(sessionId);
+  if (!session || session.status !== "ACTIVE") {
+    throw new AppError("The session is invalid or revoked.", 401, "SESSION_INVALID");
+  }
+  if (session.identityId !== identityId) {
+    throw new AppError("The session does not belong to this identity.", 403, "SESSION_IDENTITY_MISMATCH");
+  }
+  return attachDeviceToSession(sessionId, deviceId);
+}
+
 export async function attachDeviceToSessionAsync(sessionId: string, deviceId: string): Promise<Session> {
   const session = sessions.get(sessionId);
   if (!session || session.status !== "ACTIVE") {

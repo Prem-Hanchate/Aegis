@@ -32,7 +32,7 @@ function isDbConnected(): boolean {
 export function assertSupportedPolicy(role: string, resource: string, action: string) {
   const normalizedRole = role.trim();
   const permission = `${resource.trim()}:${action.trim()}`;
-  if (!Object.hasOwn(rolePermissions, normalizedRole)) {
+  if (!Object.hasOwn(defaultRolePermissions, normalizedRole)) {
     throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
   }
   if (!supportedPermissions.has(permission)) {
@@ -171,13 +171,12 @@ export async function listRolePermissionsAsync() {
 }
 
 export function grantRolePermission(role: string, resource: string, action: string): { role: string; permissions: string[] } {
-  const normalizedRole = role.trim();
-  const permission = `${resource.trim()}:${action.trim()}`;
-  if (!normalizedRole || permission === ":") {
-    throw new AppError("Role, resource, and action are required.", 400, "POLICY_INVALID_INPUT");
+  const { role: normalizedRole, permission } = assertSupportedPolicy(role, resource, action);
+  const permissions = rolePermissions[normalizedRole];
+  if (!permissions) {
+    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
   }
-  rolePermissions[normalizedRole] ??= new Set();
-  rolePermissions[normalizedRole].add(permission);
+  permissions.add(permission);
 
   if (isDbConnected()) {
     void policyRepository.grantPermission(normalizedRole, permission).catch((err) => {
@@ -185,7 +184,7 @@ export function grantRolePermission(role: string, resource: string, action: stri
     });
   }
 
-  return { role: normalizedRole, permissions: [...rolePermissions[normalizedRole]] };
+  return { role: normalizedRole, permissions: [...permissions] };
 }
 
 export async function grantRolePermissionAsync(role: string, resource: string, action: string): Promise<{ role: string; permissions: string[] }> {
@@ -205,20 +204,20 @@ export async function grantRolePermissionAsync(role: string, resource: string, a
 }
 
 export function revokeRolePermission(role: string, resource: string, action: string): { role: string; permissions: string[] } {
-  const permissions = rolePermissions[role];
+  const { role: normalizedRole, permission } = assertSupportedPolicy(role, resource, action);
+  const permissions = rolePermissions[normalizedRole];
   if (!permissions) {
     throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
   }
-  const permission = `${resource}:${action}`;
   permissions.delete(permission);
 
   if (isDbConnected()) {
-    void policyRepository.revokePermission(role, permission).catch((err) => {
+    void policyRepository.revokePermission(normalizedRole, permission).catch((err) => {
       console.error("Failed to revoke policy permission in MongoDB:", err);
     });
   }
 
-  return { role, permissions: [...permissions] };
+  return { role: normalizedRole, permissions: [...permissions] };
 }
 
 export async function revokeRolePermissionAsync(role: string, resource: string, action: string): Promise<{ role: string; permissions: string[] }> {

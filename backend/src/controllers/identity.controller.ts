@@ -35,6 +35,7 @@ export async function createIdentityController(request: Request, response: Respo
   }));
   const identity = registerIdentity(walletAddress, displayName, identityId);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: identity.identityId, resource: "identities", action: "register", outcome: "SUCCESS", reason: "Identity registered.", actor: auth.identityId });
+  recordAuditEvent({ eventType: "IDENTITY_REGISTERED", identityId: identity.identityId, resource: "identities", action: "register", outcome: "SUCCESS", reason: "Identity registered.", actor: auth.identityId });
   return response.status(201).json({ identity, transaction });
 }
 
@@ -57,6 +58,9 @@ export async function updateIdentityStatusController(request: Request, response:
     : await submitBlockchainWrite((client) => client.revokeIdentity(identityId));
   const identity = updateIdentityStatus(identityId, status);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: status === "ACTIVE" ? "activate" : "revoke", outcome: "SUCCESS", reason: `Identity status changed to ${status}.`, actor: auth.identityId });
+  if (status === "REVOKED") {
+    recordAuditEvent({ eventType: "IDENTITY_REVOKED", identityId, resource: "identities", action: "revoke", outcome: "SUCCESS", reason: "Identity revoked.", actor: auth.identityId });
+  }
   return response.status(200).json({ identity, transaction });
 }
 

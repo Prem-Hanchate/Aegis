@@ -43,7 +43,7 @@ function AuthenticatedPage() {
   const { setSession } = useAuthState();
   useEffect(() => {
     setSession(
-      { identityId: "admin", walletAddress: identities[0].walletAddress, displayName: "Alice Admin" },
+      { identityId: "admin", walletAddress: identities[0]!.walletAddress, displayName: "Alice Admin" },
       { sessionId: "session", accessToken: "token", expiresAt: "2026-12-01T00:00:00.000Z" },
       ["admin"],
       null,
@@ -56,10 +56,10 @@ function AuthenticatedPage() {
 describe("identity administration page", () => {
   beforeEach(() => {
     vi.mocked(fetchIdentities).mockResolvedValue({ identities });
-    vi.mocked(registerIdentity).mockResolvedValue({ identity: identities[1] });
-    vi.mocked(updateIdentityProfile).mockResolvedValue({ identity: { ...identities[0], displayName: "Updated Alice" } });
-    vi.mocked(updateIdentityStatus).mockResolvedValue({ identity: identities[0] });
-    vi.mocked(assignIdentityRole).mockResolvedValue({ identity: identities[0] });
+    vi.mocked(registerIdentity).mockResolvedValue({ identity: identities[1]! });
+    vi.mocked(updateIdentityProfile).mockResolvedValue({ identity: { ...identities[0]!, displayName: "Updated Alice" } });
+    vi.mocked(updateIdentityStatus).mockResolvedValue({ identity: identities[0]! });
+    vi.mocked(assignIdentityRole).mockResolvedValue({ identity: identities[0]! });
   });
 
   it("lists identities, filters by search, and shows details", async () => {
@@ -71,7 +71,7 @@ describe("identity administration page", () => {
 
     expect((await screen.findAllByText("Alice Admin")).length).toBeGreaterThan(0);
     expect(screen.getByText("Bob User")).toBeInTheDocument();
-    expect(screen.getAllByText(identities[0].walletAddress).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(identities[0]!.walletAddress).length).toBeGreaterThan(0);
 
     await userEvent.type(screen.getByRole("textbox", { name: "Search identities" }), "Bob");
     expect(screen.queryAllByRole("button", { name: /Alice Admin/ })).toHaveLength(0);

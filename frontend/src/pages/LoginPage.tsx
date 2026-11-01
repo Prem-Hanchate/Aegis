@@ -104,7 +104,10 @@ export function LoginPage() {
       // Establish authenticated session in memory
       setSession(identity, session, identity.roles, null, identity.permissions ?? []);
 
-      const destination = (location.state as { from?: string } | undefined)?.from ?? "/";
+      const requestedDestination = (location.state as { from?: string } | undefined)?.from;
+      const isAdministrator = identity.roles.includes("admin")
+        || identity.permissions?.includes("policies:manage") === true;
+      const destination = requestedDestination ?? (isAdministrator ? "/control-center" : "/");
       navigate(destination, { replace: true });
     } catch (error: unknown) {
       let message = "Wallet authentication failed.";

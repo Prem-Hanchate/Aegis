@@ -1,17 +1,17 @@
 import type { Request, Response } from "express";
-import { requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { AppError } from "../middleware/AppError.js";
+import { submitBlockchainWrite } from "../services/blockchain.service.js";
 import {
   enrollDevice,
   getActiveDevice,
+  heartbeatDevice,
   listDevicesForIdentityWithFilter,
   replaceDevice,
   revokeDevice,
-  touchDevice,
   type DeviceStatus,
 } from "../services/device.service.js";
-import { attachDeviceToSession } from "../services/session.service.js";
-import { submitBlockchainWrite } from "../services/blockchain.service.js";
+import { bindSessionToDevice } from "../services/session.service.js";
+import { requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { recordAuditEvent } from "../services/audit/audit.service.js";
 
 export function createDeviceController(request: Request, response: Response) {
@@ -19,6 +19,7 @@ export function createDeviceController(request: Request, response: Response) {
   const { name, fingerprint } = request.body as { name: string; fingerprint: string };
   const device = enrollDevice(auth.identityId, auth.sessionId, name, fingerprint);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: auth.identityId, resource: "devices", action: "enroll", outcome: "SUCCESS", reason: "Device enrolled.", actor: auth.identityId });
+  recordAuditEvent({ eventType: "DEVICE_ENROLLED", identityId: auth.identityId, resource: "devices", action: "enroll", outcome: "SUCCESS", reason: "Device enrolled.", actor: auth.identityId });
   return response.status(201).json({ device });
 }
 
@@ -53,6 +54,7 @@ export async function revokeDeviceController(request: Request, response: Respons
   const transaction = await submitBlockchainWrite((client) => client.revokeDevice(deviceId));
   const device = revokeDevice(deviceId, auth.identityId);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: auth.identityId, resource: "devices", action: "revoke", outcome: "SUCCESS", reason: "Device revoked.", actor: auth.identityId });
+  recordAuditEvent({ eventType: "DEVICE_REVOKED", identityId: auth.identityId, resource: "devices", action: "revoke", outcome: "SUCCESS", reason: "Device revoked.", actor: auth.identityId });
   return response.status(200).json({ device, transaction });
 }
 
@@ -65,6 +67,7 @@ export async function replaceDeviceController(request: Request, response: Respon
   const transaction = await submitBlockchainWrite((client) => client.revokeDevice(oldDeviceId));
   const device = replaceDevice(oldDeviceId, auth.identityId, auth.sessionId, name, fingerprint);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: auth.identityId, resource: "devices", action: "replace", outcome: "SUCCESS", reason: "Device replaced.", actor: auth.identityId });
+  recordAuditEvent({ eventType: "DEVICE_REPLACED", identityId: auth.identityId, resource: "devices", action: "replace", outcome: "SUCCESS", reason: "Device replaced.", actor: auth.identityId });
   return response.status(201).json({ device, transaction });
 }
 
@@ -73,22 +76,23 @@ export function bindDeviceController(request: Request, response: Response) {
   const deviceId = getDeviceId(request);
   // Only valid active devices owned by the authenticated identity can be bound to the session
   const device = getActiveDevice(deviceId, auth.identityId);
-  attachDeviceToSession(auth.sessionId, device.deviceId);
+  const updatedSession = bindSessionToDevice(auth.sessionId, device.deviceId, auth.identityId);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: auth.identityId, resource: "devices", action: "bind", outcome: "SUCCESS", reason: "Device bound to session.", actor: auth.identityId });
-  return response.status(200).json({ device, message: "Device bound to session successfully." });
-}
-
-function getDeviceId(request: Request) {
-  const { deviceId } = request.params;
-  if (typeof deviceId !== "string" || !deviceId) {
-    throw new AppError("Device id is required.", 400, "DEVICE_INVALID_ID");
-  }
-  return deviceId;
+  return response.status(200).json({ session: updatedSession, device });
 }
 
 export function heartbeatDeviceController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
-  const device = touchDevice(getDeviceId(request), auth.identityId);
+  const deviceId = getDeviceId(request);
+  const device = heartbeatDevice(deviceId, auth.identityId);
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: auth.identityId, resource: "devices", action: "heartbeat", outcome: "SUCCESS", reason: "Device heartbeat recorded.", actor: auth.identityId });
   return response.status(200).json({ device });
+}
+
+function getDeviceId(request: Request) {
+  const { deviceId } = request.params;
+  if (typeof deviceId !== "string" || deviceId.length === 0) {
+    throw new AppError("Device id is required.", 400, "DEVICE_INVALID_ID");
+  }
+  return deviceId;
 }

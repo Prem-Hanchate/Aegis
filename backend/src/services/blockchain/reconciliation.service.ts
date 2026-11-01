@@ -207,6 +207,7 @@ export async function reconcileTrustedState(
     return record;
   } catch (error) {
     const durationMs = Date.now() - startTime;
+    console.error("RECONCILIATION ERROR CAUGHT:", error);
     const errorMessage = error instanceof Error ? error.message : "Reconciliation failure";
 
     const failureRecord: ReconciliationResult = {

@@ -4,6 +4,7 @@ export * from "./challenge.model.js";
 export * from "./device.model.js";
 export * from "./policy.model.js";
 export * from "./audit-log.model.js";
+export * from "./audit-batch.model.js";
 export * from "./blockchain-sync-state.model.js";
 export * from "./blockchain-event.model.js";
 export * from "./reconciliation-record.model.js";

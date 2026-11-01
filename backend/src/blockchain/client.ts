@@ -71,11 +71,17 @@ export class BlockchainClient {
       throw new Error(`Blockchain chain ID mismatch. Expected: ${config.chainId}. Actual: ${network.chainId}.`);
     }
 
-    for (const [name, address] of [
+    const checkContracts = [
       ["IdentityRegistry", config.identityRegistryAddress],
       ["PolicyRegistry", config.policyRegistryAddress],
       ["RevocationRegistry", config.revocationRegistryAddress],
-    ] as const) {
+    ] as [string, string][];
+
+    if (config.auditRegistryAddress) {
+      checkContracts.push(["AuditRegistry", config.auditRegistryAddress]);
+    }
+
+    for (const [name, address] of checkContracts) {
       try {
         const code = await provider.getCode(address);
         if (code === "0x") throw new Error(`No contract code found at ${name} address.`);
@@ -112,16 +118,20 @@ export class BlockchainClient {
     return this.signer;
   }
 
+  getSignerAddress(): Promise<string> | null {
+    return this.signer ? this.signer.getAddress() : null;
+  }
+
   async verifyTransactionReceipt(txHash: string, confirmations = this.config.confirmations ?? 1) {
     if (!isHexString(txHash, 32)) {
       throw new Error("txHash must be a 32-byte hexadecimal string.");
     }
     const receipt = await this.provider.waitForTransaction(txHash);
     if (!receipt) {
-      return { verified: false, receipt: null, reason: "Receipt not found" };
+      return { verified: false, receipt: null, reason: "Receipt not found", confirmations: 0, requiredConfirmations: confirmations };
     }
     if (receipt.status !== 1) {
-      return { verified: false, receipt, reason: "Transaction reverted" };
+      return { verified: false, receipt, reason: "Transaction reverted", confirmations: 0, requiredConfirmations: confirmations };
     }
     const currentBlock = await this.provider.getBlockNumber();
     const confirmedCount = currentBlock - receipt.blockNumber + 1;
@@ -190,42 +200,122 @@ export class BlockchainClient {
   }
 
   async removeRole(identityId: string, role: string) {
-    return this.send("PolicyRegistry.removeRole", this.contracts.policyRegistry, "removeRole", [identityIdForBackendId(identityId), blockchainRoleId(role)]);
+    const roleId = blockchainRoleId(role);
+    return this.send("PolicyRegistry.removeRole", this.contracts.policyRegistry, "removeRole", [
+      identityIdForBackendId(identityId),
+      roleId,
+    ]);
   }
 
   async createPolicy(role: string, resource: string, action: string) {
     const roleId = blockchainRoleId(role);
     const permissionId = blockchainPermissionId(resource, action);
     const transactions = [];
+
     try {
       await this.contracts.policyRegistry.getFunction("getRole")(roleId);
     } catch {
       transactions.push(await this.send("PolicyRegistry.createRole", this.contracts.policyRegistry, "createRole", [roleId]));
     }
+
     try {
       await this.contracts.policyRegistry.getFunction("getPermission")(permissionId);
     } catch {
-      transactions.push(await this.send("PolicyRegistry.createPermission", this.contracts.policyRegistry, "createPermission", [permissionId, keccak256(toUtf8Bytes(resource)), keccak256(toUtf8Bytes(action))]));
+      transactions.push(
+        await this.send("PolicyRegistry.createPermission", this.contracts.policyRegistry, "createPermission", [
+          permissionId,
+          keccak256(toUtf8Bytes(resource)),
+          keccak256(toUtf8Bytes(action)),
+        ]),
+      );
     }
-    transactions.push(await this.send("PolicyRegistry.grantPermissionToRole", this.contracts.policyRegistry, "grantPermissionToRole", [roleId, permissionId]));
+
+    const granted = await this.contracts.policyRegistry.getFunction("hasPermissionForRole")(roleId, permissionId);
+    if (!granted) {
+      transactions.push(
+        await this.send("PolicyRegistry.grantPermissionToRole", this.contracts.policyRegistry, "grantPermissionToRole", [
+          roleId,
+          permissionId,
+        ]),
+      );
+    }
+
     return { operation: "policy.create", status: "confirmed" as const, transactions };
   }
 
   async revokePolicy(role: string, resource: string, action: string) {
-    const permissionId = blockchainPermissionId(resource, action);
-    const transaction = await this.send("PolicyRegistry.revokePermissionFromRole", this.contracts.policyRegistry, "revokePermissionFromRole", [blockchainRoleId(role), permissionId]);
-    const index = await this.send("RevocationRegistry.revokePermission", this.contracts.revocationRegistry, "revokePermission", [permissionId]);
-    return { operation: "policy.revoke", status: "confirmed" as const, transactions: [transaction, index] };
+    return this.send("PolicyRegistry.revokePermissionFromRole", this.contracts.policyRegistry, "revokePermissionFromRole", [
+      blockchainRoleId(role),
+      blockchainPermissionId(resource, action),
+    ]);
   }
 
   async revokeDevice(deviceId: string) {
-    return this.send("RevocationRegistry.revokeDevice", this.contracts.revocationRegistry, "revokeDevice", [requireBytes32(deviceId, "deviceId")]);
+    return this.send("RevocationRegistry.revokeDevice", this.contracts.revocationRegistry, "revokeDevice", [
+      blockchainDeviceId(deviceId),
+    ]);
+  }
+
+  async anchorAuditBatch(
+    rootHash: string,
+    batchSize: number,
+    startTimestamp: number,
+    endTimestamp: number,
+    metadata = "",
+  ) {
+    if (!this.contracts.auditRegistry) {
+      throw new Error("AuditRegistry contract is not configured.");
+    }
+    return this.send(
+      "AuditRegistry.anchorBatch",
+      this.contracts.auditRegistry,
+      "anchorBatch",
+      [
+        requireBytes32(rootHash, "rootHash"),
+        BigInt(batchSize),
+        BigInt(startTimestamp),
+        BigInt(endTimestamp),
+        metadata,
+      ],
+    );
+  }
+
+  async getAuditBatch(batchId: number | bigint) {
+    if (!this.contracts.auditRegistry) {
+      throw new Error("AuditRegistry contract is not configured.");
+    }
+    return this.contractCall("AuditRegistry.getBatch", () =>
+      this.contracts.auditRegistry!.getFunction("getBatch")(BigInt(batchId)),
+    );
+  }
+
+  async latestAuditBatchId(): Promise<bigint> {
+    if (!this.contracts.auditRegistry) {
+      throw new Error("AuditRegistry contract is not configured.");
+    }
+    return this.contractCall("AuditRegistry.latestBatchId", () =>
+      this.contracts.auditRegistry!.getFunction("latestBatchId")(),
+    );
+  }
+
+  async verifyAuditProof(rootHash: string, leafHash: string, proof: string[]): Promise<boolean> {
+    if (!this.contracts.auditRegistry) {
+      throw new Error("AuditRegistry contract is not configured.");
+    }
+    return this.contractCall("AuditRegistry.verifyProof", () =>
+      this.contracts.auditRegistry!.getFunction("verifyProof")(
+        requireBytes32(rootHash, "rootHash"),
+        requireBytes32(leafHash, "leafHash"),
+        proof.map((p) => requireBytes32(p, "proofElement")),
+      ),
+    );
   }
 
   async getIdentity(identityId: string): Promise<BlockchainIdentity> {
-    return this.contractCall("IdentityRegistry.getIdentity", () =>
+    const result = await this.contractCall("IdentityRegistry.getIdentity", () =>
       this.contracts.identityRegistry.getFunction("getIdentity")(identityIdForBackendId(identityId)),
     );
+    return result as BlockchainIdentity;
   }
 
   async getIdentityByWallet(walletAddress: string): Promise<{ identityId: string; identity: BlockchainIdentity }> {
@@ -268,7 +358,7 @@ export class BlockchainClient {
 
   async isDeviceRevoked(deviceId: string) {
     return this.contractCall("RevocationRegistry.isDeviceRevoked", () =>
-      this.contracts.revocationRegistry.getFunction("isDeviceRevoked")(requireBytes32(deviceId, "deviceId")),
+      this.contracts.revocationRegistry.getFunction("isDeviceRevoked")(blockchainDeviceId(deviceId)),
     );
   }
 

@@ -21,6 +21,7 @@ export interface BlockchainContracts {
   identityRegistry: Contract;
   policyRegistry: Contract;
   revocationRegistry: Contract;
+  auditRegistry?: Contract;
   aegisRegistry?: Contract;
 }
 
@@ -38,6 +39,10 @@ export function createBlockchainContracts(provider: ContractRunner, config: Bloc
       provider,
     ),
   };
+
+  if (config.auditRegistryAddress) {
+    contracts.auditRegistry = new Contract(config.auditRegistryAddress, loadArtifact("AuditRegistry").abi, provider);
+  }
 
   if (config.aegisRegistryAddress) {
     contracts.aegisRegistry = new Contract(config.aegisRegistryAddress, loadArtifact("AegisRegistry").abi, provider);

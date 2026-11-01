@@ -1,3 +1,4 @@
+import { pendingDeviceCreations } from "../models/device.model.js";
 import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import { AppError } from "../middleware/AppError.js";
@@ -65,7 +66,7 @@ export function enrollDevice(
   attachDeviceToSession(sessionId, device.deviceId);
 
   if (isDbConnected()) {
-    void deviceRepository.create({
+    const creationPromise = deviceRepository.create({
       deviceId: device.deviceId,
       identityId,
       name: normalizedName,
@@ -77,6 +78,8 @@ export function enrollDevice(
     }).catch((err) => {
       console.error("Failed to persist device to MongoDB:", err);
     });
+    pendingDeviceCreations.set(device.deviceId, creationPromise);
+    creationPromise.finally(() => pendingDeviceCreations.delete(device.deviceId));
   }
 
   return device;
@@ -267,6 +270,10 @@ export function touchDevice(deviceId: string, identityId: string, now = new Date
   }
 
   return updatedDevice;
+}
+
+export function heartbeatDevice(deviceId: string, identityId: string, now = new Date()): Device {
+  return touchDevice(deviceId, identityId, now);
 }
 
 export async function touchDeviceAsync(deviceId: string, identityId: string, now = new Date()): Promise<Device> {

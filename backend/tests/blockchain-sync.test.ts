@@ -166,7 +166,7 @@ describe("PHASE 2 — Blockchain Integration & Trusted-State Synchronization", (
     it("synchronizes on-chain role assignment and permission grants to influence authorization", async () => {
       const testWallet = getAddress("0x" + randomBytes(20).toString("hex"));
       const identityId = randomUUID();
-      const roleName = "operator";
+      const roleName = "operator-" + randomUUID().slice(0, 6);
 
       registerKnownRole(roleName);
       registerKnownPermission("server", "restart");

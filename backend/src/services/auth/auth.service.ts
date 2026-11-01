@@ -7,6 +7,7 @@ import type { AuthVerificationResult, IssuedLoginChallenge } from "./challenge.t
 import { getIdentityByWallet } from "../identity.service.js";
 import { createSession } from "../session.service.js";
 import { getPermissionsForRoles } from "../authorization/authorization.service.js";
+import { recordAuditEvent } from "../audit/audit.service.js";
 
 const DEFAULT_NONCE_TTL_SECONDS = 5 * 60;
 
@@ -71,6 +72,15 @@ export function verifyLoginChallenge(
   }
 
   if (challenge.used) {
+    recordAuditEvent({
+      eventType: "REPLAY_ATTEMPT",
+      identityId: null,
+      resource: "auth",
+      action: "verify",
+      outcome: "FAILURE",
+      reason: "The nonce has already been used.",
+      actor: normalizedWalletAddress,
+    }, now);
     throw new AppError("The nonce has already been used.", 400, "AUTH_NONCE_REUSED");
   }
 
@@ -91,23 +101,69 @@ export function verifyLoginChallenge(
   try {
     recoveredAddress = getAddress(verifyMessage(message, signature));
   } catch {
+    recordAuditEvent({
+      eventType: "INVALID_SIGNATURE",
+      identityId: null,
+      resource: "auth",
+      action: "verify",
+      outcome: "FAILURE",
+      reason: "Cryptographic signature could not be verified.",
+      actor: normalizedWalletAddress,
+    }, now);
     throw new AppError("The signature is invalid.", 400, "AUTH_INVALID_SIGNATURE");
   }
 
   if (recoveredAddress !== challenge.walletAddress) {
+    recordAuditEvent({
+      eventType: "INVALID_SIGNATURE",
+      identityId: null,
+      resource: "auth",
+      action: "verify",
+      outcome: "FAILURE",
+      reason: "Recovered signer address does not match challenge wallet.",
+      actor: normalizedWalletAddress,
+    }, now);
     throw new AppError("The signature does not match the registered wallet.", 400, "AUTH_INVALID_SIGNATURE");
   }
 
   const identity = getIdentityByWallet(challenge.walletAddress);
   if (!identity) {
+    recordAuditEvent({
+      eventType: "AUTH_FAILURE",
+      identityId: null,
+      resource: "auth",
+      action: "verify",
+      outcome: "FAILURE",
+      reason: "No identity is registered for this wallet.",
+      actor: challenge.walletAddress,
+    }, now);
     throw new AppError("No identity is registered for this wallet.", 403, "AUTH_IDENTITY_NOT_FOUND");
   }
   if (identity.status !== "ACTIVE") {
+    recordAuditEvent({
+      eventType: "AUTH_FAILURE",
+      identityId: identity.identityId,
+      resource: "auth",
+      action: "verify",
+      outcome: "FAILURE",
+      reason: "The identity is revoked.",
+      actor: challenge.walletAddress,
+    }, now);
     throw new AppError("The identity is revoked.", 403, "AUTH_IDENTITY_REVOKED");
   }
 
   markChallengeUsed(challenge.nonce, toIsoString(now));
   const { session, accessToken } = createSession(identity.identityId, now);
+
+  recordAuditEvent({
+    eventType: "AUTH_SUCCESS",
+    identityId: identity.identityId,
+    resource: "auth",
+    action: "verify",
+    outcome: "SUCCESS",
+    reason: "Wallet signature verified and session issued.",
+    actor: challenge.walletAddress,
+  }, now);
 
   return {
     walletAddress: challenge.walletAddress,

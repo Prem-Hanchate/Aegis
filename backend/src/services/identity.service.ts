@@ -227,7 +227,7 @@ export function updateIdentityStatus(identityId: string, status: IdentityStatus)
 }
 
 export async function updateIdentityStatusAsync(identityId: string, status: IdentityStatus): Promise<Identity> {
-  const identity = getIdentity(identityId);
+  const identity = await getIdentityAsync(identityId);
   const updatedIdentity = { ...identity, status, updatedAt: new Date().toISOString() };
   identities.set(identityId, updatedIdentity);
 
@@ -273,7 +273,7 @@ export function assignRole(identityId: string, role: string): Identity {
 }
 
 export async function assignRoleAsync(identityId: string, role: string): Promise<Identity> {
-  const identity = getIdentity(identityId);
+  const identity = await getIdentityAsync(identityId);
   const normalizedRole = role.trim();
   if (!normalizedRole) {
     throw new AppError("Role is required.", 400, "IDENTITY_INVALID_ROLE");
@@ -319,7 +319,7 @@ export function removeRole(identityId: string, role: string): Identity {
 }
 
 export async function removeRoleAsync(identityId: string, role: string): Promise<Identity> {
-  const identity = getIdentity(identityId);
+  const identity = await getIdentityAsync(identityId);
   const normalizedRole = role.trim();
   const updatedIdentity = {
     ...identity,

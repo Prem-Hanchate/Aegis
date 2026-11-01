@@ -15,6 +15,7 @@ export async function grantPolicyController(request: Request, response: Response
   const transaction = await submitBlockchainWrite((client) => client.createPolicy(role, resource, action));
   const policy = grantRolePermission(role, resource, action);
   recordAuditEvent({ eventType: "POLICY_CHANGED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: "Permission granted.", actor: auth.identityId });
+  recordAuditEvent({ eventType: "PERMISSION_GRANTED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: `Permission ${resource}:${action} granted to role ${role}.`, actor: auth.identityId });
   return response.status(201).json({ policy, transaction });
 }
 
@@ -28,5 +29,6 @@ export async function revokePolicyController(request: Request, response: Respons
   const transaction = await submitBlockchainWrite((client) => client.revokePolicy(role, resource, action));
   const policy = revokeRolePermission(role, resource, action);
   recordAuditEvent({ eventType: "POLICY_CHANGED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: "Permission revoked.", actor: auth.identityId });
+  recordAuditEvent({ eventType: "PERMISSION_REVOKED", identityId: auth.identityId, resource, action, outcome: "SUCCESS", reason: `Permission ${resource}:${action} revoked from role ${role}.`, actor: auth.identityId });
   return response.status(200).json({ policy, transaction });
 }

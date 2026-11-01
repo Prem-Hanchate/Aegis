@@ -309,13 +309,15 @@ export class BlockchainSyncService {
         break;
       }
 
-      // 
-      case "PermissionCreated":
+      case "PermissionCreated": {
+        if (!knownPermissions.has(args.permissionId) || isHexString(knownPermissions.get(args.permissionId)?.resource, 32)) {
           knownPermissions.set(args.permissionId, {
-              resource: args.resource,
-              action: args.action,
+            resource: args.resource,
+            action: args.action,
           });
-          break;
+        }
+        break;
+      }
 
       case "PermissionGranted": {
         // args: { roleId, permissionId, timestamp }
@@ -351,12 +353,18 @@ export class BlockchainSyncService {
       }
 
       case "DeviceRevoked": {
+                const device = await this.resolveDevice(args.deviceId);
+                const targetDeviceId = device ? device.deviceId : args.deviceId;
+                const res1 = await revokeDeviceDirectAsync(targetDeviceId);
+                await revokeSessionsForDeviceAsync(targetDeviceId);
+        break;
+      }
+      case "__DeviceRevokedOld": {
         // args: { deviceId, timestamp }
         const device = await this.resolveDevice(args.deviceId);
-        if (device) {
-          await revokeDeviceDirectAsync(device.deviceId);
-          await revokeSessionsForDeviceAsync(device.deviceId);
-        }
+        const targetDeviceId = device ? device.deviceId : args.deviceId;
+        await revokeDeviceDirectAsync(targetDeviceId);
+        await revokeSessionsForDeviceAsync(targetDeviceId);
         break;
       }
 
@@ -391,6 +399,14 @@ export class BlockchainSyncService {
         }
       }
     }
+    try {
+      const allMemory = listIdentities();
+      for (const id of allMemory) {
+        if (blockchainIdentityId(id.identityId) === onChainId) {
+          return id;
+        }
+      }
+    } catch {}
     return null;
   }
 
@@ -470,6 +486,7 @@ export class BlockchainSyncService {
 
       // Query raw logs/events for the contract in the range
       const events = await item.contract.queryFilter("*", fromBlock, toBlock);
+      if (events.length > 0) console.log(`[syncBlockRange] ${item.name} found ${events.length} events from ${fromBlock} to ${toBlock}:`, events.map(e => e.eventName));
 
 
 
@@ -477,6 +494,11 @@ export class BlockchainSyncService {
         if ("args" in event && event.args) {
           const eventLog = event as EventLog;
           const parsedArgs: Record<string, any> = {};
+          if (eventLog.fragment && eventLog.fragment.inputs) {
+            eventLog.fragment.inputs.forEach((input, index) => {
+              parsedArgs[input.name] = eventLog.args[index];
+            });
+          }
           for (const key of Object.keys(eventLog.args)) {
             if (isNaN(Number(key))) {
               parsedArgs[key] = eventLog.args[key];
@@ -534,7 +556,13 @@ export class BlockchainSyncService {
    */
   async syncLatest(confirmationsRequired = 1): Promise<number> {
     const provider = this.client.getProvider();
-    const currentBlock = await provider.getBlockNumber();
+    let currentBlock: number;
+    try {
+      const hexBlock = await provider.send("eth_blockNumber", []);
+      currentBlock = parseInt(hexBlock, 16);
+    } catch {
+      currentBlock = await provider.getBlockNumber();
+    }
     const targetBlock = currentBlock - confirmationsRequired + 1;
 
     if (targetBlock < 0) return 0;
@@ -553,6 +581,7 @@ export class BlockchainSyncService {
       minLastProcessed = 0;
     }
 
+    console.log(`[syncLatest] currentBlock=${currentBlock}, targetBlock=${targetBlock}, minLastProcessed=${minLastProcessed}`);
     const fromBlock = minLastProcessed === 0 ? 0 : minLastProcessed + 1;
     if (fromBlock <= targetBlock) {
       return this.syncBlockRange(fromBlock, targetBlock, confirmationsRequired);
@@ -580,6 +609,11 @@ export class BlockchainSyncService {
         if (payload && typeof payload === "object" && "log" in payload) {
           const log = payload.log as EventLog;
           const parsedArgs: Record<string, any> = {};
+          if (log.fragment && log.fragment.inputs) {
+            log.fragment.inputs.forEach((input, index) => {
+              parsedArgs[input.name] = log.args[index];
+            });
+          }
           if (payload.args) {
             for (const key of Object.keys(payload.args)) {
               if (isNaN(Number(key))) {

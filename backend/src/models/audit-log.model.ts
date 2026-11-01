@@ -73,6 +73,20 @@ export const auditLogSchema = new Schema(
       default: null,
       trim: true,
     },
+    batchId: {
+      type: Number,
+      default: null,
+      index: true,
+    },
+    leafIndex: {
+      type: Number,
+      default: null,
+    },
+    leafHash: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     collection: "audit_logs",
@@ -85,4 +99,3 @@ auditLogSchema.index({ eventType: 1, outcome: 1 });
 export type AuditLogDocument = InferSchemaType<typeof auditLogSchema> & { _id: unknown };
 export const AuditLogModel: Model<AuditLogDocument> =
   (mongoose.models?.AuditLog as Model<AuditLogDocument>) || model<AuditLogDocument>("AuditLog", auditLogSchema);
-

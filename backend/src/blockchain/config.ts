@@ -6,6 +6,7 @@ export interface BlockchainConfig {
   identityRegistryAddress: string;
   policyRegistryAddress: string;
   revocationRegistryAddress: string;
+  auditRegistryAddress?: string;
   aegisRegistryAddress?: string;
   signerPrivateKey?: string;
   confirmations?: number;
@@ -29,7 +30,7 @@ function parseAddress(source: NodeJS.ProcessEnv, name: string) {
 }
 
 export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): BlockchainConfig {
-  const rpcUrl = requiredValue(source, "RPC_URL");
+  const rpcUrl = source.RPC_URL?.trim() || source.BLOCKCHAIN_RPC_URL?.trim() || requiredValue(source, "RPC_URL");
   let parsedRpcUrl: URL;
   try {
     parsedRpcUrl = new URL(rpcUrl);
@@ -40,7 +41,7 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
     throw new Error("Blockchain configuration RPC_URL must use HTTP or HTTPS.");
   }
 
-  const chainIdValue = requiredValue(source, "CHAIN_ID");
+  const chainIdValue = source.CHAIN_ID?.trim() || source.BLOCKCHAIN_CHAIN_ID?.trim() || requiredValue(source, "CHAIN_ID");
   if (!/^\d+$/.test(chainIdValue)) {
     throw new Error("Blockchain configuration contains an invalid CHAIN_ID.");
   }
@@ -60,6 +61,7 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
     identityRegistryAddress: parseAddress(source, "IDENTITY_REGISTRY_ADDRESS"),
     policyRegistryAddress: parseAddress(source, "POLICY_REGISTRY_ADDRESS"),
     revocationRegistryAddress: parseAddress(source, "REVOCATION_REGISTRY_ADDRESS"),
+    auditRegistryAddress: source.AUDIT_REGISTRY_ADDRESS?.trim() ? parseAddress(source, "AUDIT_REGISTRY_ADDRESS") : undefined,
     aegisRegistryAddress: source.AEGIS_REGISTRY_ADDRESS?.trim() ? parseAddress(source, "AEGIS_REGISTRY_ADDRESS") : undefined,
     signerPrivateKey: source.BACKEND_SIGNER_PRIVATE_KEY?.trim() || undefined,
     confirmations: Number(confirmationsValue),
@@ -67,6 +69,7 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
 }
 
 export function hasBlockchainConfiguration(source: NodeJS.ProcessEnv = process.env) {
-  return ["RPC_URL", "CHAIN_ID", "IDENTITY_REGISTRY_ADDRESS", "POLICY_REGISTRY_ADDRESS", "REVOCATION_REGISTRY_ADDRESS"]
-    .every((name) => Boolean(source[name]?.trim()));
+  const hasRpc = Boolean(source.RPC_URL?.trim() || source.BLOCKCHAIN_RPC_URL?.trim());
+  const hasChain = Boolean(source.CHAIN_ID?.trim() || source.BLOCKCHAIN_CHAIN_ID?.trim());
+  return hasRpc && hasChain && ["IDENTITY_REGISTRY_ADDRESS", "POLICY_REGISTRY_ADDRESS", "REVOCATION_REGISTRY_ADDRESS"].every((name) => Boolean(source[name]?.trim()));
 }

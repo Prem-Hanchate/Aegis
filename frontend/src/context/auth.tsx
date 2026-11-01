@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { logout as apiLogout } from "../services/auth";
+import { fetchCurrentSession, logout as apiLogout } from "../services/auth";
 import { createTestModeSession, isTestMode } from "../config/testMode";
 
 export type AuthStatus = "anonymous" | "loading" | "authenticated" | "error";
@@ -67,15 +67,73 @@ const initialAuthState: AuthState = {
   errorMessage: null,
 };
 
+const AUTH_STORAGE_KEY = "aegis.auth.session";
+
+interface StoredAuthState {
+  identity: AuthIdentity;
+  session: AuthSession;
+  roles: string[];
+  permissions: string[];
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthStateProvider({ children }: { children: ReactNode }) {
-  // In-memory authentication state (no insecure bearer token persistence in localStorage)
-  const [state, setState] = useState<AuthState>(initialAuthState);
+  const [state, setState] = useState<AuthState>(() => {
+    if (typeof window === "undefined") return initialAuthState;
+    return sessionStorage.getItem(AUTH_STORAGE_KEY) ? { ...initialAuthState, status: "loading" } : initialAuthState;
+  });
   const [testModeEnabled, setTestModeEnabledState] = useState(isTestMode);
 
   useEffect(() => {
     if (isTestMode && testModeEnabled) setState(createTestModeSession());
+  }, []);
+
+  useEffect(() => {
+    if (isTestMode || import.meta.env.MODE === "test" || typeof window === "undefined") return;
+
+    const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) return;
+
+    let cancelled = false;
+    async function restoreSession() {
+      try {
+        const parsed = JSON.parse(stored as string) as StoredAuthState;
+        if (!parsed.session?.accessToken || new Date(parsed.session.expiresAt) <= new Date()) {
+          throw new Error("Stored session expired.");
+        }
+
+        const current = await fetchCurrentSession(parsed.session.accessToken);
+        if (cancelled) return;
+
+        const identity = current.identity;
+        const roles = current.session.roles ?? identity.roles ?? parsed.roles;
+        const permissions = identity.permissions ?? parsed.permissions;
+        const session: AuthSession = {
+          sessionId: current.session.sessionId,
+          accessToken: parsed.session.accessToken,
+          expiresAt: current.session.expiresAt ?? parsed.session.expiresAt,
+        };
+        setState({
+          status: "authenticated",
+          identity,
+          session,
+          deviceId: current.session.deviceId ?? null,
+          roles,
+          permissions,
+          errorMessage: null,
+        });
+        sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ identity, session, roles, permissions }));
+      } catch {
+        sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        if (!cancelled) setState(initialAuthState);
+      }
+    }
+
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const setTestModeEnabled = useCallback((enabled: boolean) => {
@@ -101,11 +159,15 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
         permissions,
         errorMessage: null,
       });
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ identity, session, roles, permissions }));
+      }
     },
     [],
   );
 
   const clearSession = useCallback((errorMessage: string | null = null) => {
+    if (typeof window !== "undefined") sessionStorage.removeItem(AUTH_STORAGE_KEY);
     setState({
       status: errorMessage ? "error" : "anonymous",
       identity: null,
