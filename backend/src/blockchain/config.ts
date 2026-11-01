@@ -66,5 +66,5 @@ export function loadBlockchainConfig(source: NodeJS.ProcessEnv = process.env): B
 
 export function hasBlockchainConfiguration(source: NodeJS.ProcessEnv = process.env) {
   return ["RPC_URL", "CHAIN_ID", "IDENTITY_REGISTRY_ADDRESS", "POLICY_REGISTRY_ADDRESS", "REVOCATION_REGISTRY_ADDRESS"]
-    .some((name) => Boolean(source[name]?.trim()));
+    .every((name) => Boolean(source[name]?.trim()));
 }
