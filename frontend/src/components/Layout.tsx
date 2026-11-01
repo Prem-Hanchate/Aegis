@@ -5,7 +5,8 @@ import { isTestMode } from "../config/testMode";
 const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
   ["nav-link", isActive ? "nav-link-active" : ""].filter(Boolean).join(" ");
 
-function shortenAddress(address: string): string {
+function shortenAddress(address?: string): string {
+  if (!address) return "Wallet unavailable";
   if (address.length <= 10) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -73,7 +74,7 @@ export function Layout() {
               <span className="status-dot" title="Active authenticated session" />
               <div className="user-details">
                 <strong className="user-name">{state.identity.displayName}</strong>
-                <span className="user-wallet" title={state.identity.walletAddress}>
+                <span className="user-wallet" title={state.identity.walletAddress ?? "Wallet unavailable"}>
                   {shortenAddress(state.identity.walletAddress)}
                 </span>
               </div>
