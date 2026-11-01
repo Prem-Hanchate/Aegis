@@ -57,6 +57,9 @@ export function Layout() {
                 <NavLink to="/control-center" className={navLinkClassName}>
                   Control center
                 </NavLink>
+                <NavLink to="/audit" className={navLinkClassName}>
+                  Audit
+                </NavLink>
               </div>
             ) : null}
             <div className="nav-group">

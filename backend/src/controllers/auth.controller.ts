@@ -1,18 +1,28 @@
 import type { Request, Response } from "express";
 import { issueLoginChallenge, verifyLoginChallenge } from "../services/auth/auth.service.js";
 import { revokeSession } from "../services/session.service.js";
-import { requireAuthenticatedRequest } from "../middleware/authentication.js";
+import { recordAuthenticationFailure, requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { revokeAllSessionsForIdentity } from "../services/session.service.js";
 import { getIdentity } from "../services/identity.service.js";
 import { getPermissionsForRoles } from "../services/authorization/authorization.service.js";
+import type { AuthVerificationResult } from "../services/auth/challenge.types.js";
 
 export async function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
+<<<<<<< HEAD
   const challenge = await issueLoginChallenge(walletAddress);
+=======
+  try {
+    const challenge = issueLoginChallenge(walletAddress);
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 
-  return response.status(201).json({
-    challenge,
-  });
+    return response.status(201).json({
+      challenge,
+    });
+  } catch (error) {
+    recordAuthenticationFailure(request, error instanceof Error ? error.message : "Challenge issuance failed.");
+    throw error;
+  }
 }
 
 export async function verifyLoginChallengeController(request: Request, response: Response) {
@@ -22,7 +32,17 @@ export async function verifyLoginChallengeController(request: Request, response:
     signature: string;
   };
 
+<<<<<<< HEAD
   const result = await verifyLoginChallenge(walletAddress, message, signature);
+=======
+  let result: AuthVerificationResult;
+  try {
+    result = verifyLoginChallenge(walletAddress, message, signature);
+  } catch (error) {
+    recordAuthenticationFailure(request, error instanceof Error ? error.message : "Challenge verification failed.");
+    throw error;
+  }
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 
   return response.status(200).json({
     status: "authenticated",

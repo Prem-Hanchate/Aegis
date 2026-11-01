@@ -17,3 +17,40 @@ export async function clearAuditEvents() {
 export async function summarizeAuditEvents() {
   return auditRepository.summarize();
 }
+<<<<<<< HEAD
+=======
+
+export function listAuditEvents(query: AuditQuery = {}) {
+  const filtered = auditEvents.filter((event) => {
+    return (!query.identityId || event.identityId === query.identityId)
+      && (!query.eventType || event.eventType === query.eventType)
+      && (!query.outcome || event.outcome === query.outcome);
+  });
+  const offset = Math.max(0, query.offset ?? 0);
+  const limit = Math.min(100, Math.max(1, query.limit ?? 100));
+  return {
+    total: filtered.length,
+    events: filtered.slice(offset, offset + limit),
+  };
+}
+
+export function clearAuditEvents() {
+  auditEvents.length = 0;
+}
+
+export function summarizeAuditEvents() {
+  return auditEvents.reduce(
+    (summary, event) => {
+      summary.total += 1;
+      summary.byOutcome[event.outcome] = (summary.byOutcome[event.outcome] ?? 0) + 1;
+      summary.byEventType[event.eventType] = (summary.byEventType[event.eventType] ?? 0) + 1;
+      return summary;
+    },
+    {
+      total: 0,
+      byOutcome: {} as Record<string, number>,
+      byEventType: {} as Record<string, number>,
+    },
+  );
+}
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a

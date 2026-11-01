@@ -16,6 +16,7 @@ import {
 } from "../services/identity.service.js";
 import { requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { z } from "zod";
+import { recordAuditEvent } from "../services/audit/audit.service.js";
 
 const identityQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
@@ -23,7 +24,7 @@ const identityQuerySchema = z.object({
 });
 
 export async function createIdentityController(request: Request, response: Response) {
-  requireAuthenticatedRequest(request);
+  const { auth } = requireAuthenticatedRequest(request);
   const { walletAddress, displayName } = request.body as { walletAddress: string; displayName: string };
   await assertIdentityRegistrationAvailable(walletAddress);
   const identityId = randomUUID();
@@ -32,7 +33,12 @@ export async function createIdentityController(request: Request, response: Respo
     activation: await client.activateIdentity(identityId),
     status: "confirmed" as const,
   }));
+<<<<<<< HEAD
   const identity = await registerIdentity(walletAddress, displayName, identityId);
+=======
+  const identity = registerIdentity(walletAddress, displayName, identityId);
+  recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: identity.identityId, resource: "identities", action: "register", outcome: "SUCCESS", reason: "Identity registered.", actor: auth.identityId });
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
   return response.status(201).json({ identity, transaction });
 }
 
@@ -47,12 +53,19 @@ export async function getIdentityController(request: Request, response: Response
 }
 
 export async function updateIdentityStatusController(request: Request, response: Response) {
+  const { auth } = requireAuthenticatedRequest(request);
   const { status } = request.body as { status: IdentityStatus };
   const identityId = getIdentityId(request);
   const transaction = status === "ACTIVE"
     ? await submitBlockchainWrite((client) => client.activateIdentity(identityId))
     : await submitBlockchainWrite((client) => client.revokeIdentity(identityId));
+<<<<<<< HEAD
   return response.status(200).json({ identity: await updateIdentityStatus(identityId, status), transaction });
+=======
+  const identity = updateIdentityStatus(identityId, status);
+  recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: status === "ACTIVE" ? "activate" : "revoke", outcome: "SUCCESS", reason: `Identity status changed to ${status}.`, actor: auth.identityId });
+  return response.status(200).json({ identity, transaction });
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
 
 function getIdentityId(request: Request) {
@@ -71,7 +84,13 @@ export async function assignIdentityRoleController(request: Request, response: R
   }
   const { role } = request.body as { role: string };
   const transaction = await submitBlockchainWrite((client) => client.assignRole(identityId, role));
+<<<<<<< HEAD
   return response.status(200).json({ identity: await assignRole(identityId, role), transaction });
+=======
+  const identity = assignRole(identityId, role);
+  recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: "assign-role", outcome: "SUCCESS", reason: `Role ${role} assigned.`, actor: auth.identityId });
+  return response.status(200).json({ identity, transaction });
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
 
 export async function removeIdentityRoleController(request: Request, response: Response) {
@@ -82,7 +101,13 @@ export async function removeIdentityRoleController(request: Request, response: R
   }
   const role = request.body.role as string;
   const transaction = await submitBlockchainWrite((client) => client.removeRole(identityId, role));
+<<<<<<< HEAD
   return response.status(200).json({ identity: await removeRole(identityId, role), transaction });
+=======
+  const identity = removeRole(identityId, role);
+  recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: "remove-role", outcome: "SUCCESS", reason: `Role ${role} removed.`, actor: auth.identityId });
+  return response.status(200).json({ identity, transaction });
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
 
 export async function getIdentityByWalletController(request: Request, response: Response) {
@@ -98,8 +123,18 @@ export async function getIdentityByWalletController(request: Request, response: 
   return response.status(200).json({ identity });
 }
 
+<<<<<<< HEAD
 export async function updateIdentityProfileController(request: Request, response: Response) {
   const identityId = getIdentityId(request);
   const { displayName } = request.body as { displayName: string };
   return response.status(200).json({ identity: await updateIdentityProfile(identityId, displayName) });
+=======
+export function updateIdentityProfileController(request: Request, response: Response) {
+  const { auth } = requireAuthenticatedRequest(request);
+  const identityId = getIdentityId(request);
+  const { displayName } = request.body as { displayName: string };
+  const identity = updateIdentityProfile(identityId, displayName);
+  recordAuditEvent({ eventType: "ADMIN_ACTION", identityId, resource: "identities", action: "update-profile", outcome: "SUCCESS", reason: "Identity profile updated.", actor: auth.identityId });
+  return response.status(200).json({ identity });
+>>>>>>> cc5c93babec97a051ca26374f63bc525ef9c3b8a
 }
