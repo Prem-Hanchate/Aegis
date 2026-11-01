@@ -8,4 +8,11 @@ export interface BackendHealthResponse {
     readyState: number;
     name: string | null;
   };
+  blockchain?: {
+    configured: boolean;
+    connected: boolean;
+    chainId: string | null;
+    lastSyncAttemptAt: string | null;
+    lastSyncError: string | null;
+  };
 }

@@ -40,6 +40,16 @@ export interface AuthVerificationResponse {
   };
 }
 
+export interface DeviceAuthResponse {
+  status: string;
+  result: {
+    walletAddress: string;
+    identity: AuthIdentityRecord;
+    device: { deviceId: string; name: string; permissions: string[] };
+    session: AuthSessionRecord;
+  };
+}
+
 export interface AuthMeResponse {
   session: {
     sessionId: string;

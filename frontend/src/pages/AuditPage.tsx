@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthState } from "../context/auth";
 import { ApiError } from "../services/auth";
-import { fetchAudit, fetchAuditSummary, type AuditEvent } from "../services/api";
+import { anchorAuditBatch, fetchAudit, fetchAuditBatches, fetchAuditSummary, verifyAuditBatch, type AuditBatch, type AuditEvent } from "../services/api";
 
 const pageSize = 10;
 const outcomes = ["", "ALLOWED", "DENIED", "SUCCESS", "FAILURE"] as const;
@@ -25,6 +25,9 @@ export function AuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<{ total: number; byOutcome: Record<string, number>; byEventType: Record<string, number> } | null>(null);
+  const [batches, setBatches] = useState<AuditBatch[]>([]);
+  const [anchoring, setAnchoring] = useState(false);
+  const [verification, setVerification] = useState<Record<number, boolean | undefined>>({});
   const [identityId, setIdentityId] = useState("");
   const [eventType, setEventType] = useState("");
   const [outcome, setOutcome] = useState<(typeof outcomes)[number]>("");
@@ -43,12 +46,14 @@ export function AuditPage() {
     Promise.all([
       fetchAudit(accessToken, { identityId: identityId || undefined, eventType: eventType || undefined, outcome: outcome || undefined, limit: pageSize, offset }),
       fetchAuditSummary(accessToken),
+      fetchAuditBatches(accessToken),
     ])
-      .then(([auditResponse, summaryResponse]) => {
+      .then(([auditResponse, summaryResponse, batchesResponse]) => {
         if (!active) return;
         setEvents(auditResponse.events);
         setTotal(auditResponse.total);
         setSummary(summaryResponse.summary);
+        setBatches(batchesResponse.batches);
       })
       .catch((requestError: unknown) => {
         if (!active) return;
@@ -67,6 +72,30 @@ export function AuditPage() {
       active = false;
     };
   }, [accessToken, canView, identityId, eventType, outcome, offset]);
+
+  async function handleAnchor() {
+    if (!accessToken || anchoring) return;
+    setAnchoring(true);
+    setError(null);
+    try {
+      const response = await anchorAuditBatch(accessToken);
+      setBatches((current) => [response.batch, ...current]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The audit batch could not be anchored.");
+    } finally {
+      setAnchoring(false);
+    }
+
+    async function handleVerify(batchId: number) {
+      if (!accessToken) return;
+      try {
+        const response = await verifyAuditBatch(accessToken, batchId);
+        setVerification((current) => ({ ...current, [batchId]: response.verification.valid }));
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : "The audit batch could not be verified.");
+      }
+    }
+  }
 
   function resetPage() {
     setOffset(0);
@@ -98,8 +127,31 @@ export function AuditPage() {
       </div>
 
       <div className="audit-notice" role="note">
-        This dashboard reports events recorded by the running backend. Events are currently held in memory; this view does not prove durable storage, tamper resistance, or complete historical coverage.
+        This dashboard reports events recorded by the running backend. Durable history and tamper-evidence depend on MongoDB persistence and successful audit-batch anchoring.
       </div>
+
+      <section className="panel audit-panel">
+        <div className="panel-heading">
+          <div><p className="eyebrow">Integrity anchoring</p><h3>Latest audit batches</h3></div>
+          <button className="quiet-button" type="button" onClick={() => void handleAnchor()} disabled={anchoring}>
+            {anchoring ? "Anchoring..." : "Anchor unanchored events"}
+          </button>
+        </div>
+        {batches.length === 0 ? <p className="muted-text">No audit batches have been created.</p> : (
+          <div className="audit-list">
+            {batches.slice(0, 3).map((batch) => (
+              <div className="data-row" key={batch.batchId}>
+                <div><strong>Batch #{batch.batchId} · {batch.batchSize} events</strong><small>{batch.rootHash}</small></div>
+                <div className="row-actions">
+                  <span className={batch.status === "ANCHORED" ? "audit-allowed" : "audit-denied"}>{batch.status}</span>
+                  <button className="quiet-button" type="button" onClick={() => void handleVerify(batch.batchId)}>Verify</button>
+                  {verification[batch.batchId] !== undefined ? <small>{verification[batch.batchId] ? "Integrity verified" : "Integrity mismatch"}</small> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {summary ? (
         <div className="audit-summary-grid" aria-label="Audit summary">

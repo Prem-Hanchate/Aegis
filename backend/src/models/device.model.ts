@@ -18,8 +18,32 @@ export const deviceSchema = new Schema(
     },
     fingerprint: {
       type: String,
-      required: true,
+      required: false,
       index: true,
+      trim: true,
+    },
+    publicKey: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    permissions: {
+      type: [String],
+      default: [],
+    },
+    approvalStatus: {
+      type: String,
+      enum: ["LEGACY", "PENDING", "APPROVED"],
+      default: "LEGACY",
+      index: true,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    approvedBy: {
+      type: String,
+      default: null,
       trim: true,
     },
     deviceName: {
@@ -61,6 +85,7 @@ export const deviceSchema = new Schema(
 );
 
 deviceSchema.index({ identityId: 1, fingerprint: 1, status: 1 });
+deviceSchema.index({ identityId: 1, publicKey: 1, status: 1 });
 deviceSchema.index({ identityId: 1, status: 1 });
 
 export type DeviceDocument = InferSchemaType<typeof deviceSchema> & { _id: unknown; name?: string };
@@ -80,4 +105,3 @@ deviceSchema.pre('findOne', async function() {
 
 export const DeviceModel: Model<DeviceDocument> =
   (mongoose.models?.Device as Model<DeviceDocument>) || model<DeviceDocument>("Device", deviceSchema);
-

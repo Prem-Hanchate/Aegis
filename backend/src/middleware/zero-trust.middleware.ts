@@ -16,6 +16,10 @@ export function requireZeroTrustAuthorization(resource: string, action: string):
         context: {
           ipAddress: rawIp,
           userAgent,
+          requestMethod: request.method,
+          requestPath: (request.originalUrl || request.path).split("?")[0] ?? "",
+          deviceProofTimestamp: request.header("x-aegis-device-timestamp") ?? undefined,
+          deviceProofSignature: request.header("x-aegis-device-signature") ?? undefined,
         },
       });
 
@@ -25,4 +29,3 @@ export function requireZeroTrustAuthorization(resource: string, action: string):
     }
   };
 }
-

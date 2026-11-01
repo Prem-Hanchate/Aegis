@@ -6,6 +6,8 @@ import { revokeAllSessionsForIdentity } from "../services/session.service.js";
 import { getIdentity } from "../services/identity.service.js";
 import { getPermissionsForRoles } from "../services/authorization/authorization.service.js";
 import type { AuthVerificationResult } from "../services/auth/challenge.types.js";
+import { issueDeviceLoginChallenge, verifyDeviceLogin } from "../services/auth/device-auth.service.js";
+import { getActiveDevice } from "../services/device.service.js";
 
 export function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
@@ -42,6 +44,24 @@ export function verifyLoginChallengeController(request: Request, response: Respo
   });
 }
 
+export async function createDeviceLoginChallengeController(request: Request, response: Response) {
+  const { deviceId } = request.body as { deviceId: string };
+  return response.status(201).json({ challenge: await issueDeviceLoginChallenge(deviceId) });
+}
+
+export async function verifyDeviceLoginController(request: Request, response: Response) {
+  const { deviceId, nonce, timestamp, signature } = request.body as {
+    deviceId: string;
+    nonce: string;
+    timestamp: string;
+    signature: string;
+  };
+  return response.status(200).json({
+    status: "authenticated",
+    result: await verifyDeviceLogin(deviceId, nonce, timestamp, signature),
+  });
+}
+
 export function logoutController(request: Request, response: Response) {
   const authorization = request.header("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
@@ -57,11 +77,17 @@ export function logoutController(request: Request, response: Response) {
 
 export function currentSessionController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
+  const identity = getIdentity(auth.identityId);
+  const device = auth.deviceId ? getActiveDevice(auth.deviceId, auth.identityId) : null;
+  const rolePermissions = getPermissionsForRoles(auth.roles);
+  const permissions = device?.permissions.length
+    ? rolePermissions.filter((permission) => device.permissions.includes(permission))
+    : rolePermissions;
   return response.status(200).json({
     session: auth,
     identity: {
-      ...getIdentity(auth.identityId),
-      permissions: getPermissionsForRoles(auth.roles),
+      ...identity,
+      permissions,
     },
   });
 }

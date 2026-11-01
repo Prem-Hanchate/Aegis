@@ -1,4 +1,5 @@
-import type { AuthChallengeResponse, AuthMeResponse, AuthVerificationResponse } from "../types/auth";
+import type { AuthChallengeResponse, AuthMeResponse, AuthVerificationResponse, DeviceAuthResponse } from "../types/auth";
+import { getBrowserDevice, signBrowserDeviceLogin } from "./device-crypto";
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -66,6 +67,21 @@ export function verifyLoginChallenge(payload: {
   return requestJson<AuthVerificationResponse>("/auth/verify", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deviceLogin(): Promise<DeviceAuthResponse> {
+  const device = getBrowserDevice();
+  if (!device) throw new ApiError("No paired device is stored in this browser.", 400, "DEVICE_NOT_PAIRED");
+  const challenge = await requestJson<{ challenge: { nonce: string; timestamp: string } }>("/auth/device/challenge", {
+    method: "POST",
+    body: JSON.stringify({ deviceId: device.deviceId }),
+  });
+  const proof = signBrowserDeviceLogin(challenge.challenge);
+  if (!proof) throw new ApiError("The paired device key is unavailable.", 400, "DEVICE_KEY_MISSING");
+  return requestJson<DeviceAuthResponse>("/auth/device/verify", {
+    method: "POST",
+    body: JSON.stringify({ deviceId: device.deviceId, nonce: challenge.challenge.nonce, timestamp: challenge.challenge.timestamp, signature: proof.signature }),
   });
 }
 

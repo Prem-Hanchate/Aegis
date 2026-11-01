@@ -2,7 +2,7 @@ import { pendingDeviceCreations } from "../models/device.model.js";
 import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import { AppError } from "../middleware/AppError.js";
-import { attachDeviceToSession } from "./session.service.js";
+import { attachDeviceToSession, revokeSessionsForDevice } from "./session.service.js";
 import { deviceRepository } from "../repositories/device.repository.js";
 
 export type DeviceStatus = "ACTIVE" | "REVOKED";
@@ -13,6 +13,11 @@ export interface Device {
   name: string;
   deviceName?: string;
   fingerprint: string;
+  publicKey: string | null;
+  permissions: string[];
+  approvalStatus: "LEGACY" | "PENDING" | "APPROVED";
+  approvedAt: string | null;
+  approvedBy: string | null;
   status: DeviceStatus;
   createdAt: string;
   lastSeenAt: string;
@@ -55,6 +60,11 @@ export function enrollDevice(
     name: normalizedName,
     deviceName: normalizedName,
     fingerprint: normalizedFingerprint,
+    publicKey: null,
+    permissions: [],
+    approvalStatus: "LEGACY",
+    approvedAt: null,
+    approvedBy: null,
     status: "ACTIVE",
     createdAt: timestamp,
     lastSeenAt: timestamp,
@@ -71,6 +81,9 @@ export function enrollDevice(
       identityId,
       name: normalizedName,
       fingerprint: normalizedFingerprint,
+      publicKey: null,
+      permissions: [],
+      approvalStatus: "LEGACY",
       status: "ACTIVE",
       createdAt: now,
       lastSeenAt: now,
@@ -113,6 +126,8 @@ export async function enrollDeviceAsync(
       identityId,
       name: normalizedName,
       fingerprint: normalizedFingerprint,
+      publicKey: null,
+      approvalStatus: "LEGACY",
       status: "ACTIVE",
       createdAt: now,
       lastSeenAt: now,
@@ -124,6 +139,66 @@ export async function enrollDeviceAsync(
   }
 
   return enrollDevice(identityId, sessionId, name, fingerprint, now, replacementOf);
+}
+
+export function requestDevicePairing(
+  identityId: string,
+  name: string,
+  publicKey: string,
+  now = new Date(),
+): Device {
+  const normalizedName = name.trim();
+  const normalizedKey = publicKey.trim();
+  if (!normalizedName || !normalizedKey) {
+    throw new AppError("Device name and public key are required.", 400, "DEVICE_INVALID_PAIRING");
+  }
+  const timestamp = now.toISOString();
+  const device: Device = {
+    deviceId: randomUUID(),
+    identityId,
+    name: normalizedName,
+    deviceName: normalizedName,
+    fingerprint: "",
+    publicKey: normalizedKey,
+    permissions: [],
+    approvalStatus: "PENDING",
+    approvedAt: null,
+    approvedBy: null,
+    status: "ACTIVE",
+    createdAt: timestamp,
+    lastSeenAt: timestamp,
+    revokedAt: null,
+    replacementOf: null,
+  };
+  devices.set(device.deviceId, device);
+  if (isDbConnected()) {
+    void deviceRepository.create({
+      deviceId: device.deviceId,
+      identityId,
+      name: normalizedName,
+      fingerprint: "",
+      publicKey: normalizedKey,
+      permissions: [],
+      approvalStatus: "PENDING",
+      createdAt: now,
+      lastSeenAt: now,
+    }).catch((err) => console.error("Failed to persist pending device:", err));
+  }
+  return device;
+}
+
+export function approveDevice(deviceId: string, approvedBy: string, now = new Date()): Device {
+  const device = getDevice(deviceId);
+  if (device.status !== "ACTIVE") throw new AppError("The device is revoked.", 403, "DEVICE_REVOKED");
+  if (device.approvalStatus !== "PENDING") {
+    throw new AppError("The device is not pending approval.", 409, "DEVICE_NOT_PENDING");
+  }
+  const approved: Device = { ...device, approvalStatus: "APPROVED", approvedAt: now.toISOString(), approvedBy };
+  devices.set(deviceId, approved);
+  if (isDbConnected()) {
+    void deviceRepository.approve(deviceId, approvedBy, now).catch((err) => console.error("Failed to approve device:", err));
+  }
+  return approved;
 }
 
 export function getDevice(deviceId: string) {
@@ -157,8 +232,56 @@ export function getActiveDevice(deviceId: string, identityId: string) {
   return device;
 }
 
+export function getApprovedDevice(deviceId: string, identityId: string) {
+  const device = getActiveDevice(deviceId, identityId);
+  if (device.approvalStatus === "PENDING") {
+    throw new AppError("The device is awaiting administrator approval.", 403, "DEVICE_PENDING_APPROVAL");
+  }
+
+  return device;
+}
+
+export function updateDevicePermissions(
+  deviceId: string,
+  identityId: string,
+  permissions: string[],
+  allowedPermissions: string[] = [],
+): Device {
+  const device = getApprovedDevice(deviceId, identityId);
+  const normalized = [...new Set(permissions.map((permission) => permission.trim()).filter(Boolean))];
+  const allowed = new Set(allowedPermissions);
+  if (normalized.some((permission) => !allowed.has(permission))) {
+    throw new AppError(
+      "A device cannot be granted permissions outside the account authorization.",
+      403,
+      "DEVICE_PERMISSION_ESCALATION",
+    );
+  }
+  const updated = { ...device, permissions: normalized };
+  devices.set(deviceId, updated);
+  if (isDbConnected()) {
+    void deviceRepository.updatePermissions(deviceId, normalized).catch((err) => {
+      console.error("Failed to update device permissions in MongoDB:", err);
+    });
+  }
+  return updated;
+}
+
 export function listDevicesForIdentity(identityId: string) {
   return [...devices.values()].filter((device) => device.identityId === identityId);
+}
+
+export function listAllDevices() {
+  return [...devices.values()];
+}
+
+export async function listAllDevicesAsync() {
+  if (isDbConnected()) {
+    const all = await deviceRepository.listAll();
+    for (const device of all) devices.set(device.deviceId, device);
+    return all;
+  }
+  return listAllDevices();
 }
 
 export function listDevicesForIdentityWithFilter(
@@ -207,6 +330,7 @@ export function revokeDeviceDirect(deviceId: string, now = new Date()): Device |
     const revokedDevice: Device = { ...device, status: "REVOKED" as const, revokedAt: now.toISOString() };
     devices.set(deviceId, revokedDevice);
   }
+  revokeSessionsForDevice(deviceId, now);
 
   if (isDbConnected()) {
     void deviceRepository.revokeDirect(deviceId, now).catch((err) => {
@@ -217,12 +341,21 @@ export function revokeDeviceDirect(deviceId: string, now = new Date()): Device |
   return device ? { ...device, status: "REVOKED" as const, revokedAt: now.toISOString() } : null;
 }
 
+export function revokeDevicesForIdentity(identityId: string, now = new Date()): number {
+  const identityDevices = listDevicesForIdentity(identityId).filter((device) => device.status === "ACTIVE");
+  for (const device of identityDevices) {
+    revokeDeviceDirect(device.deviceId, now);
+  }
+  return identityDevices.length;
+}
+
 export async function revokeDeviceDirectAsync(deviceId: string, now = new Date()): Promise<Device | null> {
   let device = devices.get(deviceId) ?? null;
   if (isDbConnected()) {
     const updated = await deviceRepository.revokeDirect(deviceId, now);
     if (updated) {
       devices.set(updated.deviceId, updated);
+      revokeSessionsForDevice(updated.deviceId, now);
       return updated;
     }
   }
@@ -230,6 +363,7 @@ export async function revokeDeviceDirectAsync(deviceId: string, now = new Date()
   if (device) {
     const revokedDevice: Device = { ...device, status: "REVOKED" as const, revokedAt: now.toISOString() };
     devices.set(deviceId, revokedDevice);
+    revokeSessionsForDevice(deviceId, now);
     return revokedDevice;
   }
   return null;
@@ -303,6 +437,11 @@ export async function rehydrateDeviceStore(): Promise<void> {
         name,
         deviceName: name,
         fingerprint: doc.fingerprint,
+        publicKey: doc.publicKey ?? null,
+        permissions: [...(doc.permissions ?? [])],
+        approvalStatus: doc.approvalStatus ?? "LEGACY",
+        approvedAt: doc.approvedAt ? (doc.approvedAt instanceof Date ? doc.approvedAt.toISOString() : String(doc.approvedAt)) : null,
+        approvedBy: doc.approvedBy ?? null,
         status: doc.status,
         createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
         lastSeenAt: doc.lastSeenAt instanceof Date ? doc.lastSeenAt.toISOString() : String(doc.lastSeenAt),

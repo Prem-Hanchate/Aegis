@@ -5,11 +5,13 @@ import { MemoryRouter } from "react-router-dom";
 import { AuthStateProvider, useAuthState } from "../src/context/auth";
 import { AuditPage } from "../src/pages/AuditPage";
 import { ApiError } from "../src/services/auth";
-import { fetchAudit, fetchAuditSummary } from "../src/services/api";
+import { fetchAudit, fetchAuditBatches, fetchAuditSummary, verifyAuditBatch } from "../src/services/api";
 
 vi.mock("../src/services/api", () => ({
   fetchAudit: vi.fn(),
   fetchAuditSummary: vi.fn(),
+  fetchAuditBatches: vi.fn(),
+  verifyAuditBatch: vi.fn(),
 }));
 
 const adminPermissions = ["policies:manage"];
@@ -47,6 +49,7 @@ describe("audit dashboard", () => {
     vi.mocked(fetchAuditSummary).mockResolvedValue({
       summary: { total: 11, byOutcome: { ALLOWED: 5, DENIED: 2, FAILURE: 1, SUCCESS: 3 }, byEventType: {} },
     });
+    vi.mocked(fetchAuditBatches).mockResolvedValue({ batches: [] });
   });
 
   it("loads the real audit filters and resets pagination when a filter changes", async () => {

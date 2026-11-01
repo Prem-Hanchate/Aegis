@@ -22,9 +22,9 @@ async function main() {
   const auditRegistry = await auditRegistryFactory.deploy(deployer.address);
   await auditRegistry.waitForDeployment();
 
-  const employeeRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:EMPLOYEE"));
-  const managerRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:MANAGER"));
-  const adminRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:ADMIN"));
+  const employeeRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:employee"));
+  const managerRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:manager"));
+  const adminRole = ethers.keccak256(ethers.toUtf8Bytes("AegisRole:v1:admin"));
   const employeeRead = ethers.keccak256(ethers.toUtf8Bytes("AegisPermission:v1:employee:read"));
   const reportsRead = ethers.keccak256(ethers.toUtf8Bytes("AegisPermission:v1:reports:read"));
   const payrollRead = ethers.keccak256(ethers.toUtf8Bytes("AegisPermission:v1:payroll:read"));

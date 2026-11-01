@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { AppError } from "../../middleware/AppError.js";
 import { getIdentity } from "../identity.service.js";
-import { getActiveSession } from "../session.service.js";
+import { getActiveSession, hashToken } from "../session.service.js";
 import { getActiveDevice, getDevice } from "../device.service.js";
 import { hasPermission, getPermissionsForRoles } from "./authorization.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
@@ -17,8 +17,9 @@ import {
   PolicyModel,
   SessionModel,
 } from "../../models/index.js";
-import { BlockchainClient } from "../../blockchain/client.js";
+import { BlockchainClient, blockchainPermissionId } from "../../blockchain/client.js";
 import { hasBlockchainConfiguration, loadBlockchainConfig } from "../../blockchain/config.js";
+import { verifyDeviceProof } from "../device-proof.service.js";
 
 function isDbConnected(): boolean {
   return mongoose.connection.readyState === 1;
@@ -48,9 +49,10 @@ const MAX_SYNC_STALENESS_MS = 60 * 1000; // 60 seconds
  * Checks whether the local blockchain sync state is sufficiently fresh.
  */
 export async function isBlockchainSyncFresh(maxStalenessMs = MAX_SYNC_STALENESS_MS): Promise<boolean> {
-  if (!isDbConnected() || !hasBlockchainConfiguration()) {
+  if (!hasBlockchainConfiguration()) {
     return true; // Not configured or in memory mode
   }
+  if (!isDbConnected()) return false;
 
   const syncStates = await BlockchainSyncStateModel.find();
   if (syncStates.length === 0) {
@@ -74,33 +76,29 @@ export async function isBlockchainSyncFresh(maxStalenessMs = MAX_SYNC_STALENESS_
 async function verifyAuthoritativeBlockchainRevocation(
   identityId: string,
   deviceId: string,
+  permissionId: string,
   client?: BlockchainClient | null
-): Promise<{ identityRevoked: boolean; deviceRevoked: boolean }> {
+): Promise<{ identityRevoked: boolean; deviceRevoked: boolean; permissionRevoked: boolean }> {
   let activeClient = client;
 
   if (!activeClient && hasBlockchainConfiguration()) {
-    try {
-      const config = loadBlockchainConfig();
-      activeClient = await BlockchainClient.connect(config);
-    } catch {
-      return { identityRevoked: false, deviceRevoked: false };
-    }
+    const config = loadBlockchainConfig();
+    activeClient = await BlockchainClient.connect(config);
   }
 
   if (!activeClient) {
-    return { identityRevoked: false, deviceRevoked: false };
+    return { identityRevoked: false, deviceRevoked: false, permissionRevoked: false };
   }
 
-  try {
-    const [identityRevoked, deviceRevoked] = await Promise.all([
-      activeClient.isIdentityRevoked(identityId).catch(() => false),
-      activeClient.isDeviceRevoked(deviceId).catch(() => false),
-    ]);
+  const [identityRevoked, deviceRevoked, permissionRevoked] = await Promise.all([
+    activeClient.isIdentityRevoked(identityId),
+    activeClient.isDeviceRevoked(deviceId),
+    typeof activeClient.isPermissionRevoked === "function"
+      ? activeClient.isPermissionRevoked(permissionId)
+      : Promise.resolve(false),
+  ]);
 
-    return { identityRevoked, deviceRevoked };
-  } catch {
-    return { identityRevoked: false, deviceRevoked: false };
-  }
+  return { identityRevoked, deviceRevoked, permissionRevoked };
 }
 
 /**
@@ -122,14 +120,21 @@ export async function evaluateZeroTrustAuthorization(
   try {
     session = getActiveSession(accessToken, now);
   } catch (error) {
+    if (error instanceof AppError && (error.code !== "SESSION_INVALID" || (error.details as { revoked?: boolean } | undefined)?.revoked)) {
+      throw error;
+    }
     if (isDbConnected()) {
       // Check MongoDB session repository as fallback
-      const sessionDoc = await SessionModel.findOne({ status: "ACTIVE" }).exec();
+      const sessionDoc = await SessionModel.findOne({
+        tokenHash: hashToken(accessToken),
+        status: "ACTIVE",
+        expiresAt: { $gt: now },
+      }).exec();
       if (!sessionDoc) throw error;
       session = {
         sessionId: sessionDoc.sessionId,
         identityId: sessionDoc.identityId,
-        deviceId: sessionDoc.deviceId,
+        deviceId: sessionDoc.deviceId ?? null,
         expiresAt: sessionDoc.expiresAt.toISOString(),
         status: sessionDoc.status,
         createdAt: sessionDoc.createdAt,
@@ -174,10 +179,29 @@ export async function evaluateZeroTrustAuthorization(
   if (device.status !== "ACTIVE") {
     throw new AppError("The device is revoked.", 403, "DEVICE_REVOKED");
   }
+  if (device.approvalStatus === "PENDING") {
+    throw new AppError("The device is awaiting administrator approval.", 403, "DEVICE_PENDING_APPROVAL");
+  }
+  if (device.publicKey) {
+    if (!context.deviceProofTimestamp || !context.deviceProofSignature || !context.requestMethod || !context.requestPath) {
+      throw new AppError("A signed device proof is required.", 403, "DEVICE_PROOF_REQUIRED");
+    }
+    verifyDeviceProof({
+      deviceId: device.deviceId,
+      sessionId: session.sessionId,
+      timestamp: context.deviceProofTimestamp,
+      method: context.requestMethod,
+      path: context.requestPath,
+      signature: context.deviceProofSignature,
+      publicKey: device.publicKey,
+      now,
+    });
+  }
 
   // 4. Role and Permission Validation (Granular resource:action check)
   const permission = `${resource.trim()}:${action.trim()}`;
-  const allowed = hasPermission(identity.identityId, resource, action);
+  const allowed = hasPermission(identity.identityId, resource, action)
+    && (device.permissions.length === 0 || device.permissions.includes(permission));
 
   if (!allowed) {
     recordAuditEvent({
@@ -187,7 +211,7 @@ export async function evaluateZeroTrustAuthorization(
       resource,
       action,
       outcome: "DENIED",
-      reason: `Role does not grant ${permission} permission.`,
+      reason: `The device is not granted ${permission} permission.`,
       actor: identity.walletAddress,
       ipAddress: context.ipAddress ?? null,
       userAgent: context.userAgent ?? null,
@@ -232,11 +256,31 @@ export async function evaluateZeroTrustAuthorization(
   // Guarantee: Never allow a known revoked identity or device to gain access due to stale cache
   const syncFresh = await isBlockchainSyncFresh();
   if (!syncFresh || clientOverride) {
-    const { identityRevoked, deviceRevoked } = await verifyAuthoritativeBlockchainRevocation(
-      identity.identityId,
-      device.deviceId,
-      clientOverride
-    );
+    let authoritativeState: Awaited<ReturnType<typeof verifyAuthoritativeBlockchainRevocation>>;
+    try {
+      authoritativeState = await verifyAuthoritativeBlockchainRevocation(
+        identity.identityId,
+        device.deviceId,
+        blockchainPermissionId(resource, action),
+        clientOverride,
+      );
+    } catch {
+      recordAuditEvent({
+        eventType: "BLOCKCHAIN_SYNC_FAILURE",
+        identityId: identity.identityId,
+        deviceId: device.deviceId,
+        resource,
+        action,
+        outcome: "DENIED",
+        reason: "Blockchain trust state could not be verified.",
+        actor: identity.walletAddress,
+        ipAddress: context.ipAddress ?? null,
+        userAgent: context.userAgent ?? null,
+      }, now);
+      throw new AppError("Blockchain trust state is unavailable; access is denied.", 503, "BLOCKCHAIN_TRUST_UNAVAILABLE");
+    }
+
+    const { identityRevoked, deviceRevoked, permissionRevoked } = authoritativeState;
 
     if (identityRevoked) {
       recordAuditEvent({
@@ -268,6 +312,22 @@ export async function evaluateZeroTrustAuthorization(
         userAgent: context.userAgent ?? null,
       }, now);
       throw new AppError("Device is revoked on blockchain.", 403, "DEVICE_REVOKED");
+    }
+
+    if (permissionRevoked) {
+      recordAuditEvent({
+        eventType: "ACCESS_DECISION",
+        identityId: identity.identityId,
+        deviceId: device.deviceId,
+        resource,
+        action,
+        outcome: "DENIED",
+        reason: "Authoritative blockchain state confirms permission is revoked.",
+        actor: identity.walletAddress,
+        ipAddress: context.ipAddress ?? null,
+        userAgent: context.userAgent ?? null,
+      }, now);
+      throw new AppError("Permission is revoked on blockchain.", 403, "PERMISSION_REVOKED");
     }
   }
 

@@ -20,6 +20,34 @@ This repository is organized as a monorepo with three workspaces:
 - **MongoDB**: Standalone or Docker (`docker compose up mongo`) for backend readiness
 - **Ethereum RPC Node**: Hardhat local node (`npx hardhat node` in `contracts/`) or compatible testnet
 
+## Device trust workflow
+
+Aegis protects application/API resources, not the operating system. For a
+real device identity, use the included local device agent. It generates an
+elliptic-curve key pair and keeps the private key in
+`tools/.aegis-device.json`; only the public key is sent to Aegis.
+
+1. Authenticate a wallet and copy its bearer token from the authenticated
+   session.
+2. Pair the device:
+
+   ```bash
+   node tools/device-agent.mjs pair --token <token> --name "Office workstation"
+   ```
+
+3. An administrator opens **My devices**, loads all devices, and approves the
+   pending device.
+4. The agent can request a protected resource with a signed device proof:
+
+   ```bash
+   node tools/device-agent.mjs access --token <token> --resource reports
+   ```
+
+Unsigned, stale, unapproved, or revoked device requests are denied. Revoking
+the device immediately removes access to Aegis-protected resources. This
+workflow intentionally does not lock screens, manage files, run processes, or
+control hardware.
+
 ---
 
 ## Setup & Running Locally
@@ -45,6 +73,19 @@ npm run dev:frontend
 ```
 
 The frontend runs on `http://localhost:5173`.
+
+To use Aegis from a phone or another computer on the same Wi-Fi network,
+start Vite with its LAN host enabled (already configured):
+
+```text
+http://<your-computer-lan-ip>:5173
+```
+
+Open that address in the phone browser, authenticate, open **My devices**, and
+choose **Pair This Browser**. The browser generates the device key locally,
+the administrator approves the pending device, and **Bind to Session** enables
+signed access to protected Aegis resources. No Node.js installation is needed
+on the phone. Keep the phone and development computer on the same network.
 
 4. Run all automated tests:
 

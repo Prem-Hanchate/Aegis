@@ -80,7 +80,10 @@ import {
   rehydrateAuditStore,
 } from "../src/services/audit/audit.service.js";
 
-const TEST_DB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/identity_security_db";
+const TEST_DB_URI =
+  process.env.MONGODB_TEST_URI ||
+  process.env.MONGODB_URI ||
+  "mongodb://localhost:27017/identity_security_db";
 
 describe("PHASE 1 — MongoDB Persistence & Repository Layer", () => {
   beforeAll(async () => {
@@ -500,7 +503,7 @@ describe("PHASE 1 — MongoDB Persistence & Repository Layer", () => {
 
         // Attempting to connect to an unreachable host with short timeout fails cleanly
         await expect(
-          mongoose.createConnection("mongodb://invalid-host-never-resolves:27017/test", {
+          mongoose.createConnection("mongodb://127.0.0.1:1/test", {
             serverSelectionTimeoutMS: 500,
           }).asPromise(),
         ).rejects.toThrow();

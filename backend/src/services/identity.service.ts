@@ -5,6 +5,7 @@ import { AppError } from "../middleware/AppError.js";
 import { revokeSessionsForIdentity } from "./session.service.js";
 import { identityRepository } from "../repositories/identity.repository.js";
 import { policyRepository } from "../repositories/policy.repository.js";
+import { revokeDevicesForIdentity } from "./device.service.js";
 
 export type IdentityStatus = "ACTIVE" | "REVOKED";
 
@@ -215,6 +216,7 @@ export function updateIdentityStatus(identityId: string, status: IdentityStatus)
 
   if (status === "REVOKED") {
     revokeSessionsForIdentity(identityId);
+    revokeDevicesForIdentity(identityId);
   }
 
   if (isDbConnected()) {
@@ -233,6 +235,7 @@ export async function updateIdentityStatusAsync(identityId: string, status: Iden
 
   if (status === "REVOKED") {
     revokeSessionsForIdentity(identityId);
+    revokeDevicesForIdentity(identityId);
   }
 
   if (isDbConnected()) {
