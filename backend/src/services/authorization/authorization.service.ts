@@ -1,13 +1,19 @@
+import mongoose from "mongoose";
 import { AppError } from "../../middleware/AppError.js";
 import type { RequestHandler } from "express";
 import { getIdentity } from "../identity.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
+import { policyRepository } from "../../repositories/policy.repository.js";
 
 const rolePermissions: Record<string, Set<string>> = {
   employee: new Set(["employee:read", "reports:read"]),
   manager: new Set(["employee:read", "reports:read", "payroll:read"]),
   admin: new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]),
 };
+
+function isDbConnected(): boolean {
+  return mongoose.connection.readyState === 1;
+}
 
 export function authorizeRequest(identityId: string, resource: string, action: string) {
   const identity = getIdentity(identityId);
@@ -52,6 +58,12 @@ interface RequestWithAuth {
   auth?: { identityId: string };
 }
 
+export function resetAuthorizationMemoryStore() {
+  for (const permissions of Object.values(rolePermissions)) {
+    permissions.clear();
+  }
+}
+
 export function clearAuthorizationState() {
   for (const permissions of Object.values(rolePermissions)) {
     permissions.clear();
@@ -59,13 +71,31 @@ export function clearAuthorizationState() {
   rolePermissions.employee = new Set(["employee:read", "reports:read"]);
   rolePermissions.manager = new Set(["employee:read", "reports:read", "payroll:read"]);
   rolePermissions.admin = new Set(["employee:read", "reports:read", "payroll:read", "policies:manage"]);
+
+  if (isDbConnected()) {
+    void policyRepository.clear().then(() => policyRepository.seedDefaults()).catch((err) => {
+      console.error("Failed to reset policies in MongoDB:", err);
+    });
+  }
 }
 
 export function listRolePermissions() {
   return Object.fromEntries(Object.entries(rolePermissions).map(([role, permissions]) => [role, [...permissions]]));
 }
 
-export function grantRolePermission(role: string, resource: string, action: string) {
+export async function listRolePermissionsAsync() {
+  if (isDbConnected()) {
+    const policies = await policyRepository.listAll();
+    const result: Record<string, string[]> = {};
+    for (const p of policies) {
+      result[p.role] = p.permissions;
+    }
+    return result;
+  }
+  return listRolePermissions();
+}
+
+export function grantRolePermission(role: string, resource: string, action: string): { role: string; permissions: string[] } {
   const normalizedRole = role.trim();
   const permission = `${resource.trim()}:${action.trim()}`;
   if (!normalizedRole || permission === ":") {
@@ -73,14 +103,73 @@ export function grantRolePermission(role: string, resource: string, action: stri
   }
   rolePermissions[normalizedRole] ??= new Set();
   rolePermissions[normalizedRole].add(permission);
+
+  if (isDbConnected()) {
+    void policyRepository.grantPermission(normalizedRole, permission).catch((err) => {
+      console.error("Failed to grant policy permission in MongoDB:", err);
+    });
+  }
+
   return { role: normalizedRole, permissions: [...rolePermissions[normalizedRole]] };
 }
 
-export function revokeRolePermission(role: string, resource: string, action: string) {
+export async function grantRolePermissionAsync(role: string, resource: string, action: string): Promise<{ role: string; permissions: string[] }> {
+  const normalizedRole = role.trim();
+  const permission = `${resource.trim()}:${action.trim()}`;
+  if (!normalizedRole || permission === ":") {
+    throw new AppError("Role, resource, and action are required.", 400, "POLICY_INVALID_INPUT");
+  }
+  rolePermissions[normalizedRole] ??= new Set();
+  rolePermissions[normalizedRole].add(permission);
+
+  if (isDbConnected()) {
+    await policyRepository.grantPermission(normalizedRole, permission);
+  }
+
+  return { role: normalizedRole, permissions: [...rolePermissions[normalizedRole]] };
+}
+
+export function revokeRolePermission(role: string, resource: string, action: string): { role: string; permissions: string[] } {
   const permissions = rolePermissions[role];
   if (!permissions) {
     throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
   }
-  permissions.delete(`${resource}:${action}`);
+  const permission = `${resource}:${action}`;
+  permissions.delete(permission);
+
+  if (isDbConnected()) {
+    void policyRepository.revokePermission(role, permission).catch((err) => {
+      console.error("Failed to revoke policy permission in MongoDB:", err);
+    });
+  }
+
   return { role, permissions: [...permissions] };
+}
+
+export async function revokeRolePermissionAsync(role: string, resource: string, action: string): Promise<{ role: string; permissions: string[] }> {
+  const permissions = rolePermissions[role];
+  if (!permissions) {
+    throw new AppError("Role not found.", 404, "POLICY_ROLE_NOT_FOUND");
+  }
+  const permission = `${resource}:${action}`;
+  permissions.delete(permission);
+
+  if (isDbConnected()) {
+    await policyRepository.revokePermission(role, permission);
+  }
+
+  return { role, permissions: [...permissions] };
+}
+
+export async function rehydratePolicyStore(): Promise<void> {
+  if (isDbConnected()) {
+    const policies = await policyRepository.listAll();
+    if (policies.length === 0) {
+      await policyRepository.seedDefaults();
+      return;
+    }
+    for (const p of policies) {
+      rolePermissions[p.role] = new Set(p.permissions);
+    }
+  }
 }
