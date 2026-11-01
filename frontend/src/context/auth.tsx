@@ -4,13 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { fetchCurrentSession, logout as apiLogout } from "../services/auth";
+import { logout as apiLogout } from "../services/auth";
+import { createTestModeSession, isTestMode } from "../config/testMode";
 
 export type AuthStatus = "anonymous" | "loading" | "authenticated" | "error";
 
@@ -52,6 +52,8 @@ interface AuthContextValue {
   clearSession: (errorMessage?: string | null) => void;
   setError: (errorMessage: string) => void;
   setLoading: (loading: boolean) => void;
+  testModeEnabled: boolean;
+  setTestModeEnabled: (enabled: boolean) => void;
   logout: () => Promise<void>;
 }
 
@@ -68,10 +70,19 @@ const initialAuthState: AuthState = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthStateProvider({ children }: { children: ReactNode }) {
-  const restoreToken = useRef(sessionStorage.getItem("aegis.accessToken"));
-  const [state, setState] = useState<AuthState>(() => (
-    restoreToken.current ? { ...initialAuthState, status: "loading" } : initialAuthState
-  ));
+  // In-memory authentication state (no insecure bearer token persistence in localStorage)
+  const [state, setState] = useState<AuthState>(initialAuthState);
+  const [testModeEnabled, setTestModeEnabledState] = useState(isTestMode);
+
+  useEffect(() => {
+    if (isTestMode && testModeEnabled) setState(createTestModeSession());
+  }, []);
+
+  const setTestModeEnabled = useCallback((enabled: boolean) => {
+    if (!isTestMode) return;
+    setTestModeEnabledState(enabled);
+    setState(enabled ? createTestModeSession() : initialAuthState);
+  }, []);
 
   const setSession = useCallback(
     (
@@ -90,13 +101,11 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
         permissions,
         errorMessage: null,
       });
-      sessionStorage.setItem("aegis.accessToken", session.accessToken);
     },
     [],
   );
 
   const clearSession = useCallback((errorMessage: string | null = null) => {
-    sessionStorage.removeItem("aegis.accessToken");
     setState({
       status: errorMessage ? "error" : "anonymous",
       identity: null,
@@ -107,37 +116,6 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
       errorMessage,
     });
   }, []);
-
-  useEffect(() => {
-    const accessToken = restoreToken.current;
-    if (!accessToken) {
-      return;
-    }
-
-    void fetchCurrentSession(accessToken)
-      .then((response) => {
-        setSession(
-          {
-            identityId: response.identity.identityId,
-            walletAddress: response.identity.walletAddress,
-            displayName: response.identity.displayName,
-            status: response.identity.status,
-            permissions: response.identity.permissions,
-          },
-          {
-            sessionId: response.session.sessionId,
-            accessToken,
-            expiresAt: response.session.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-          },
-          response.session.roles ?? response.identity.roles,
-          response.session.deviceId,
-          response.identity.permissions ?? [],
-        );
-      })
-      .catch(() => {
-        clearSession();
-      });
-  }, [clearSession, setSession]);
 
   const setError = useCallback((errorMessage: string) => {
     setState((current) => ({
@@ -206,9 +184,11 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
       clearSession,
       setError,
       setLoading,
+      testModeEnabled,
+      setTestModeEnabled,
       logout,
     }),
-    [state, setSession, setDeviceId, clearSession, setError, setLoading, logout],
+    [state, setSession, setDeviceId, clearSession, setError, setLoading, testModeEnabled, setTestModeEnabled, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

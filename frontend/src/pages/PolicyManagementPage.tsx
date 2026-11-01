@@ -10,6 +10,7 @@ const permissions = [
   { resource: "payroll", action: "read", label: "Payroll" },
   { resource: "policies", action: "manage", label: "Policy management" },
 ] as const;
+type PermissionOption = (typeof permissions)[number];
 
 function errorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError && error.status === 403) return "You are not authorized to manage policies.";
@@ -23,7 +24,7 @@ export function PolicyManagementPage() {
   const canManage = state.permissions.includes("policies:manage");
   const [policies, setPolicies] = useState<PolicyMap>({});
   const [selectedRole, setSelectedRole] = useState<(typeof roles)[number]>("employee");
-  const [selectedPermission, setSelectedPermission] = useState(permissions[0]);
+  const [selectedPermission, setSelectedPermission] = useState<PermissionOption>(permissions[0]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
