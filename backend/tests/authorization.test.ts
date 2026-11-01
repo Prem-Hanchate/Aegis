@@ -11,8 +11,8 @@ import { clearDeviceStore } from "../src/services/device.service.js";
 type TestWallet = ReturnType<typeof Wallet.createRandom>;
 
 async function authenticate(app: ReturnType<typeof createApp>, wallet: TestWallet, displayName: string, role: string) {
-  const identity = registerIdentity(wallet.address, displayName);
-  assignRole(identity.identityId, role);
+  const identity = await registerIdentity(wallet.address, displayName);
+  await assignRole(identity.identityId, role);
 
   const challengeResponse = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
   const message = challengeResponse.body.challenge.message as string;
@@ -31,12 +31,12 @@ async function authenticate(app: ReturnType<typeof createApp>, wallet: TestWalle
 }
 
 describe("protected resources", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearIdentityStore();
-    clearSessionStore();
-    clearDeviceStore();
-    clearAuditEvents();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearIdentityStore();
+    await clearSessionStore();
+    await clearDeviceStore();
+    await clearAuditEvents();
   });
 
   it("requires a valid session", async () => {
@@ -61,7 +61,7 @@ describe("protected resources", () => {
     expect(payrollResponse.status).toBe(403);
     expect(payrollResponse.body.error.code).toBe("AUTHORIZATION_DENIED");
 
-    expect(listAuditEvents().events).toEqual(
+    expect((await listAuditEvents()).events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ eventType: "ACCESS_DECISION", resource: "employee", outcome: "ALLOWED" }),
         expect.objectContaining({ eventType: "ACCESS_DECISION", resource: "payroll", outcome: "DENIED" }),

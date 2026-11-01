@@ -11,8 +11,8 @@ import { clearAuthorizationState } from "../src/services/authorization/authoriza
 
 async function loginWithRole(app: ReturnType<typeof createApp>, role: string) {
   const wallet = Wallet.createRandom();
-  const identity = registerIdentity(wallet.address, role);
-  assignRole(identity.identityId, role);
+  const identity = await registerIdentity(wallet.address, role);
+  await assignRole(identity.identityId, role);
   const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
   const message = challenge.body.challenge.message as string;
   const signature = await wallet.signMessage(message);
@@ -30,13 +30,13 @@ async function loginWithRole(app: ReturnType<typeof createApp>, role: string) {
 }
 
 describe("device, policy, and audit features", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearIdentityStore();
-    clearSessionStore();
-    clearDeviceStore();
-    clearAuditEvents();
-    clearAuthorizationState();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearIdentityStore();
+    await clearSessionStore();
+    await clearDeviceStore();
+    await clearAuditEvents();
+    await clearAuthorizationState();
   });
 
   it("revokes a device and denies its protected resource access", async () => {

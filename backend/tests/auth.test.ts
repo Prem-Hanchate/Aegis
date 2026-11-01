@@ -9,17 +9,17 @@ import { clearIdentityStore, registerIdentity, updateIdentityStatus } from "../s
 import { clearSessionStore } from "../src/services/session.service.js";
 
 describe("auth endpoints", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearIdentityStore();
-    clearSessionStore();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearIdentityStore();
+    await clearSessionStore();
     vi.useRealTimers();
   });
 
   it("accepts a valid nonce and signature", async () => {
     const wallet = Wallet.createRandom();
     const app = createApp();
-    registerIdentity(wallet.address, "Test User");
+    await registerIdentity(wallet.address, "Test User");
 
     const challengeResponse = await request(app).post("/api/auth/challenge").send({
       walletAddress: wallet.address,
@@ -89,8 +89,8 @@ describe("auth endpoints", () => {
   it("rejects a revoked identity", async () => {
     const wallet = Wallet.createRandom();
     const app = createApp();
-    const identity = registerIdentity(wallet.address, "Test User");
-    updateIdentityStatus(identity.identityId, "REVOKED");
+    const identity = await registerIdentity(wallet.address, "Test User");
+    await updateIdentityStatus(identity.identityId, "REVOKED");
 
     const challengeResponse = await request(app).post("/api/auth/challenge").send({
       walletAddress: wallet.address,
@@ -132,13 +132,13 @@ describe("auth endpoints", () => {
 
   it("rejects an expired nonce", async () => {
     const wallet = Wallet.createRandom();
-    registerIdentity(wallet.address, "Test User");
+    await registerIdentity(wallet.address, "Test User");
     const issuedAt = new Date("2026-08-14T00:00:00.000Z");
-    const challenge = issueLoginChallenge(wallet.address, issuedAt);
+    const challenge = await issueLoginChallenge(wallet.address, issuedAt);
     const signature = await wallet.signMessage(challenge.message);
 
     try {
-      verifyLoginChallenge(wallet.address, challenge.message, signature, new Date(issuedAt.getTime() + 6 * 60 * 1000));
+      await verifyLoginChallenge(wallet.address, challenge.message, signature, new Date(issuedAt.getTime() + 6 * 60 * 1000));
       throw new Error("Expected expired nonce to throw.");
     } catch (error) {
       expect(error).toHaveProperty("code", "AUTH_NONCE_EXPIRED");
@@ -148,7 +148,7 @@ describe("auth endpoints", () => {
   it("rejects a reused nonce", async () => {
     const wallet = Wallet.createRandom();
     const app = createApp();
-    registerIdentity(wallet.address, "Test User");
+    await registerIdentity(wallet.address, "Test User");
 
     const challengeResponse = await request(app).post("/api/auth/challenge").send({
       walletAddress: wallet.address,

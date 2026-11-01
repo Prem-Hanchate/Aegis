@@ -17,8 +17,8 @@ import { clearSessionStore } from "../src/services/session.service.js";
 
 async function authenticate(app: ReturnType<typeof createApp>, role: string, existingWallet = Wallet.createRandom()) {
   const wallet = existingWallet;
-  const identity = getIdentityByWallet(wallet.address) ?? registerIdentity(wallet.address, role);
-  assignRole(identity.identityId, role);
+  const identity = (await getIdentityByWallet(wallet.address)) ?? (await registerIdentity(wallet.address, role));
+  await assignRole(identity.identityId, role);
   const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
   const message = challenge.body.challenge.message as string;
   const signature = await wallet.signMessage(message);
@@ -34,13 +34,13 @@ async function authenticate(app: ReturnType<typeof createApp>, role: string, exi
 }
 
 describe("identity administration security boundary", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearAuditEvents();
-    clearAuthorizationState();
-    clearDeviceStore();
-    clearIdentityStore();
-    clearSessionStore();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearAuditEvents();
+    await clearAuthorizationState();
+    await clearDeviceStore();
+    await clearIdentityStore();
+    await clearSessionStore();
   });
 
   it("requires policies:manage for identity creation and does not expose wallet lookup publicly", async () => {
@@ -136,9 +136,9 @@ describe("identity administration security boundary", () => {
   it("supports server-side identity search and status filters", async () => {
     const app = createApp();
     const admin = await authenticate(app, "admin");
-    registerIdentity(Wallet.createRandom().address, "Active Analyst");
-    const revoked = registerIdentity(Wallet.createRandom().address, "Revoked Analyst");
-    updateIdentityStatus(revoked.identityId, "REVOKED");
+    await registerIdentity(Wallet.createRandom().address, "Active Analyst");
+    const revoked = await registerIdentity(Wallet.createRandom().address, "Revoked Analyst");
+    await updateIdentityStatus(revoked.identityId, "REVOKED");
 
     const response = await request(app)
       .get("/api/identities?search=analyst&status=REVOKED")

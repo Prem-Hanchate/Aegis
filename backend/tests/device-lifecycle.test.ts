@@ -11,8 +11,8 @@ import { clearAuthorizationState } from "../src/services/authorization/authoriza
 
 async function createAuthenticatedUser(app: ReturnType<typeof createApp>, role = "employee", name = "Test User") {
   const wallet = Wallet.createRandom();
-  const identity = registerIdentity(wallet.address, name);
-  assignRole(identity.identityId, role);
+  const identity = await registerIdentity(wallet.address, name);
+  await assignRole(identity.identityId, role);
 
   const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
   const message = challenge.body.challenge.message as string;
@@ -31,13 +31,13 @@ async function createAuthenticatedUser(app: ReturnType<typeof createApp>, role =
 }
 
 describe("Device Lifecycle, Ownership & Security Boundary", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearIdentityStore();
-    clearSessionStore();
-    clearDeviceStore();
-    clearAuditEvents();
-    clearAuthorizationState();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearIdentityStore();
+    await clearSessionStore();
+    await clearDeviceStore();
+    await clearAuditEvents();
+    await clearAuthorizationState();
   });
 
   it("lists devices scoped strictly to the authenticated identity", async () => {
