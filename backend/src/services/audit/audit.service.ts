@@ -40,8 +40,8 @@ export function listAuditEvents(query: AuditQuery = {}) {
       && (!query.eventType || event.eventType === query.eventType)
       && (!query.outcome || event.outcome === query.outcome);
   });
-  const offset = query.offset ?? 0;
-  const limit = query.limit ?? 100;
+  const offset = Math.max(0, query.offset ?? 0);
+  const limit = Math.min(100, Math.max(1, query.limit ?? 100));
   return {
     total: filtered.length,
     events: filtered.slice(offset, offset + limit),

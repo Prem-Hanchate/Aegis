@@ -84,7 +84,6 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
     setState(enabled ? createTestModeSession() : initialAuthState);
   }, []);
 
-
   const setSession = useCallback(
     (
       identity: AuthIdentity,

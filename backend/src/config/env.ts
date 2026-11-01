@@ -14,6 +14,8 @@ const environmentSchema = z.object({
   IDENTITY_REGISTRY_ADDRESS: z.string().optional(),
   POLICY_REGISTRY_ADDRESS: z.string().optional(),
   REVOCATION_REGISTRY_ADDRESS: z.string().optional(),
+  BOOTSTRAP_ADMIN_WALLET: z.string().optional(),
+  BOOTSTRAP_ADMIN_DISPLAY_NAME: z.string().trim().min(1).max(120).default("Aegis Administrator"),
 });
 
 const parsed = environmentSchema.parse(process.env);
@@ -28,5 +30,7 @@ export const env = {
   identityRegistryAddress: parsed.IDENTITY_REGISTRY_ADDRESS,
   policyRegistryAddress: parsed.POLICY_REGISTRY_ADDRESS,
   revocationRegistryAddress: parsed.REVOCATION_REGISTRY_ADDRESS,
+  bootstrapAdminWallet: parsed.BOOTSTRAP_ADMIN_WALLET,
+  bootstrapAdminDisplayName: parsed.BOOTSTRAP_ADMIN_DISPLAY_NAME,
   isProduction: parsed.NODE_ENV === "production",
 };
