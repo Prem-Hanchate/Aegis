@@ -76,9 +76,28 @@ export interface DeviceSummary {
   name: string;
   fingerprint: string;
   status: "ACTIVE" | "REVOKED";
+  accessLevel?: "TEMPORARY" | "UNRESTRICTED";
+  isApproved?: boolean;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  identityDisplayName?: string;
+  walletAddress?: string;
   createdAt?: string;
   lastSeenAt: string;
   revokedAt?: string | null;
+}
+
+export function fetchPendingDevices(accessToken: string): Promise<{ devices: DeviceSummary[] }> {
+  return requestProtectedJson<{ devices: DeviceSummary[] }>("/devices/pending", accessToken);
+}
+
+export function approveDevice(
+  accessToken: string,
+  deviceId: string,
+): Promise<{ device: DeviceSummary }> {
+  return requestProtectedJson<{ device: DeviceSummary }>(`/devices/${deviceId}/approve`, accessToken, {
+    method: "PATCH",
+  });
 }
 
 export function fetchDevices(

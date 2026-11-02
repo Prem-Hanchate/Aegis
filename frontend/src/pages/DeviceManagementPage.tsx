@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuthState } from "../context/auth";
 import {
+  approveDevice,
   bindDevice,
   enrollDevice,
   fetchDevices,
+  fetchPendingDevices,
   heartbeatDevice,
   replaceDevice,
   revokeDevice,
@@ -27,10 +29,16 @@ function generateBrowserFingerprint(): string {
 export function DeviceManagementPage() {
   const { state, setDeviceId, clearSession } = useAuthState();
   const accessToken = state.session?.accessToken;
+  const isAdmin = state.permissions.includes("policies:manage");
 
   const [devices, setDevices] = useState<DeviceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "REVOKED">("ALL");
+
+  // Admin Pending Devices State
+  const [pendingDevices, setPendingDevices] = useState<DeviceSummary[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   // Notifications
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -64,11 +72,38 @@ export function DeviceManagementPage() {
     } finally {
       setLoading(false);
     }
+
+    if (isAdmin) {
+      setPendingLoading(true);
+      try {
+        const pendingResponse = await fetchPendingDevices(accessToken);
+        setPendingDevices(pendingResponse.devices);
+      } catch {
+        // Pending devices optional check
+      } finally {
+        setPendingLoading(false);
+      }
+    }
   }
 
   useEffect(() => {
     void loadDevices();
-  }, [accessToken]);
+  }, [accessToken, isAdmin]);
+
+  async function handleApproveDevice(deviceId: string) {
+    if (!accessToken) return;
+    setApprovingId(deviceId);
+    clearAlerts();
+    try {
+      const response = await approveDevice(accessToken, deviceId);
+      setSuccessMessage(`Device "${response.device.name}" approved. Unrestricted access granted.`);
+      await loadDevices();
+    } catch (error: unknown) {
+      handleApiError(error, "Failed to approve device.");
+    } finally {
+      setApprovingId(null);
+    }
+  }
 
   function handleApiError(error: unknown, defaultMessage: string) {
     if (error instanceof ApiError) {
@@ -216,6 +251,8 @@ export function DeviceManagementPage() {
 
   const currentBoundDeviceId = state.deviceId;
   const boundDevice = devices.find((d) => d.deviceId === currentBoundDeviceId && d.status === "ACTIVE");
+  const isTemporary = Boolean(boundDevice && (boundDevice.accessLevel === "TEMPORARY" || !boundDevice.isApproved));
+  const isUnrestricted = Boolean(boundDevice && !isTemporary);
 
   const filteredDevices = devices.filter((d) => {
     if (statusFilter === "ACTIVE") return d.status === "ACTIVE";
@@ -251,20 +288,31 @@ export function DeviceManagementPage() {
       </div>
 
       {/* Session Binding Status Banner */}
-      <div className={`session-posture-banner ${boundDevice ? "posture-secure" : "posture-warning"}`}>
+      <div className={`session-posture-banner ${isUnrestricted ? "posture-secure" : "posture-warning"}`}>
         <div className="posture-indicator">
-          <span className={`status-dot ${boundDevice ? "" : "status-dot-denied"}`} />
+          <span className={`status-dot ${isUnrestricted ? "" : isTemporary ? "status-dot-pending" : "status-dot-denied"}`} />
           <div>
-            <strong>Session Hardware Binding: {boundDevice ? "Bound & Active" : "No Active Device Bound"}</strong>
+            <strong>
+              Session Hardware Binding:{" "}
+              {!boundDevice
+                ? "No Active Device Bound"
+                : isTemporary
+                ? "Bound & Temporary Access (Pending Admin Approval)"
+                : "Bound & Active (Unrestricted Access)"}
+            </strong>
             <p>
-              {boundDevice
-                ? `Current session is bound to ${boundDevice.name} (${boundDevice.fingerprint}). Resource access authorized.`
-                : "Your session is not currently bound to an active device. Enroll a new device below or bind an existing active device to unlock protected corporate endpoints."}
+              {!boundDevice
+                ? "Your session is not currently bound to an active device. Enroll a new device below or bind an existing active device to unlock protected corporate endpoints."
+                : isTemporary
+                ? `Current session is bound to ${boundDevice.name} (${boundDevice.fingerprint}) with Temporary Access. Hardware context is recognized, but accessing restricted corporate workspaces (Employee, Reports, Payroll) requires administrator approval for unrestricted access.`
+                : `Current session is bound to ${boundDevice.name} (${boundDevice.fingerprint}). Full unrestricted Zero Trust access authorized by administrator.`}
             </p>
           </div>
         </div>
         {boundDevice && (
-          <span className="status-badge" title="Device ID">{boundDevice.deviceId.slice(0, 8)}...</span>
+          <span className={`status-badge ${isTemporary ? "status-badge-warning" : ""}`} title="Device ID">
+            {isTemporary ? "TEMPORARY ACCESS" : "UNRESTRICTED"}
+          </span>
         )}
       </div>
 
@@ -397,9 +445,24 @@ export function DeviceManagementPage() {
                           <span className="current-badge">BOUND TO CURRENT SESSION</span>
                         )}
                       </div>
-                      <span className={`status-badge ${device.status === "ACTIVE" ? "" : "status-badge-muted"}`}>
-                        {device.status}
-                      </span>
+                      <div className="status-badges" style={{ display: "flex", gap: "6px" }}>
+                        <span className={`status-badge ${device.status === "ACTIVE" ? "" : "status-badge-muted"}`}>
+                          {device.status}
+                        </span>
+                        {device.status === "ACTIVE" && (
+                          <span
+                            className={`status-badge ${
+                              device.accessLevel === "TEMPORARY" || !device.isApproved
+                                ? "status-badge-warning"
+                                : "status-badge-success"
+                            }`}
+                          >
+                            {device.accessLevel === "TEMPORARY" || !device.isApproved
+                              ? "TEMPORARY ACCESS"
+                              : "APPROVED"}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="device-meta-grid">
@@ -482,6 +545,81 @@ export function DeviceManagementPage() {
           )}
         </div>
       </div>
+
+      {/* Admin Pending Device Approvals Panel */}
+      {isAdmin && (
+        <div className="panel pending-approvals-panel" style={{ marginTop: "24px" }}>
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Administrative Governance</p>
+              <h3>Pending Device Approvals ({pendingDevices.length})</h3>
+            </div>
+            <span className="status-badge status-badge-warning">
+              {pendingDevices.length} Awaiting Unrestricted Access
+            </span>
+          </div>
+          <p className="muted-text">
+            Newly enrolled employee devices receive temporary access only. Review and approve devices below to grant unrestricted access to restricted corporate workspaces.
+          </p>
+
+          {pendingLoading ? (
+            <p className="muted-text">Loading pending approvals...</p>
+          ) : pendingDevices.length === 0 ? (
+            <div className="empty-state">
+              <p>No devices currently pending approval. All active hardware has unrestricted access.</p>
+            </div>
+          ) : (
+            <div className="device-cards">
+              {pendingDevices.map((device) => (
+                <div key={device.deviceId} className="device-card">
+                  <div className="device-card-header">
+                    <div className="device-title-block">
+                      <strong>{device.name}</strong>
+                      <span className="current-badge" style={{ background: "rgba(234, 179, 8, 0.15)", color: "#eab308" }}>
+                        TEMPORARY ACCESS
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                      disabled={approvingId === device.deviceId}
+                      onClick={() => void handleApproveDevice(device.deviceId)}
+                    >
+                      {approvingId === device.deviceId ? "Approving..." : "Approve Device (Grant Unrestricted Access)"}
+                    </button>
+                  </div>
+
+                  <div className="device-meta-grid">
+                    <div>
+                      <span className="meta-label">Identity / Owner</span>
+                      <strong style={{ fontSize: "0.9rem" }}>{device.identityDisplayName ?? "Employee"}</strong>
+                    </div>
+                    <div>
+                      <span className="meta-label">Identifier</span>
+                      <code className="meta-code" title={device.deviceId}>
+                        {device.deviceId.slice(0, 12)}...
+                      </code>
+                    </div>
+                    <div>
+                      <span className="meta-label">Fingerprint</span>
+                      <code className="meta-code" title={device.fingerprint}>
+                        {device.fingerprint}
+                      </code>
+                    </div>
+                    <div>
+                      <span className="meta-label">Enrolled At</span>
+                      <span className="meta-time">
+                        {device.createdAt ? new Date(device.createdAt).toLocaleString() : "Recently"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Revocation Confirmation Dialog */}
       {deviceToRevoke && (

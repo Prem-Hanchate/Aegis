@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthState } from "../context/auth";
 import {
+  approveDevice,
   fetchAudit,
   fetchAuditSummary,
   fetchDevices,
   fetchIdentities,
+  fetchPendingDevices,
   fetchPolicies,
   revokeAllSessions,
   type AuditEvent,
@@ -30,10 +32,12 @@ export function ControlCenterPage() {
   const accessToken = state.session?.accessToken ?? "";
   const [identities, setIdentities] = useState<ManagedIdentity[]>([]);
   const [devices, setDevices] = useState<DeviceSummary[]>([]);
+  const [pendingDevices, setPendingDevices] = useState<DeviceSummary[]>([]);
   const [policies, setPolicies] = useState<PolicyMap>({});
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [summary, setSummary] = useState<AuditSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingRevokeAll, setConfirmingRevokeAll] = useState(false);
@@ -45,14 +49,16 @@ export function ControlCenterPage() {
     const results = await Promise.allSettled([
       fetchIdentities(accessToken),
       fetchDevices(accessToken),
+      fetchPendingDevices(accessToken),
       fetchPolicies(accessToken),
       fetchAudit(accessToken, { limit: 6 }),
       fetchAuditSummary(accessToken),
     ]);
 
-    const [identityResult, deviceResult, policyResult, auditResult, summaryResult] = results;
+    const [identityResult, deviceResult, pendingResult, policyResult, auditResult, summaryResult] = results;
     if (identityResult.status === "fulfilled") setIdentities(identityResult.value.identities);
     if (deviceResult.status === "fulfilled") setDevices(deviceResult.value.devices);
+    if (pendingResult.status === "fulfilled") setPendingDevices(pendingResult.value.devices);
     if (policyResult.status === "fulfilled") setPolicies(policyResult.value.policies);
     if (auditResult.status === "fulfilled") setEvents(auditResult.value.events);
     if (summaryResult.status === "fulfilled") setSummary(summaryResult.value.summary);
@@ -69,6 +75,22 @@ export function ControlCenterPage() {
   useEffect(() => {
     void refresh();
   }, [accessToken]);
+
+  async function handleApproveDevice(deviceId: string) {
+    if (!accessToken) return;
+    setApprovingId(deviceId);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await approveDevice(accessToken, deviceId);
+      setMessage(`Device "${response.device.name}" approved for unrestricted access.`);
+      await refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to approve device.");
+    } finally {
+      setApprovingId(null);
+    }
+  }
 
   async function handleRevokeAllSessions() {
     if (!accessToken || revokingAll) return;
@@ -128,9 +150,64 @@ export function ControlCenterPage() {
       <div className="overview-metrics">
         <div className="panel metric-card"><span className="meta-label">Identities</span><strong>{activeIdentities} active</strong><small>{identities.length} registered</small></div>
         <div className="panel metric-card"><span className="meta-label">Devices</span><strong>{activeDevices} active</strong><small>{devices.length - activeDevices} revoked</small></div>
-        <div className="panel metric-card"><span className="meta-label">Policies</span><strong>{Object.keys(policies).length} roles</strong><small>Live permission map</small></div>
+        <div className="panel metric-card">
+          <span className="meta-label">Pending Devices</span>
+          <strong className={pendingDevices.length > 0 ? "error-text" : "success-text"}>
+            {pendingDevices.length} pending
+          </strong>
+          <small>Temporary access</small>
+        </div>
         <div className="panel metric-card"><span className="meta-label">Denied access</span><strong className={deniedEvents ? "error-text" : "success-text"}>{deniedEvents}</strong><small>Recorded audit events</small></div>
       </div>
+
+      {pendingDevices.length > 0 && (
+        <section className="panel" style={{ marginTop: "20px" }}>
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Zero Trust Hardware Governance</p>
+              <h3>Pending Device Approvals ({pendingDevices.length})</h3>
+            </div>
+            <span className="status-badge status-badge-warning">Action Required</span>
+          </div>
+          <p className="muted-text">
+            Employees with newly enrolled devices are restricted to temporary access until an administrator approves their hardware.
+          </p>
+          <div className="table-responsive">
+            <table className="data-table" style={{ width: "100%", marginTop: "12px" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Device Name</th>
+                  <th style={{ textAlign: "left" }}>Operator / Identity</th>
+                  <th style={{ textAlign: "left" }}>Fingerprint</th>
+                  <th style={{ textAlign: "left" }}>Enrolled</th>
+                  <th style={{ textAlign: "right" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingDevices.map((device) => (
+                  <tr key={device.deviceId}>
+                    <td><strong>{device.name}</strong></td>
+                    <td>{device.identityDisplayName ?? "Employee"}</td>
+                    <td><code>{device.fingerprint.slice(0, 16)}...</code></td>
+                    <td>{device.createdAt ? new Date(device.createdAt).toLocaleTimeString() : "-"}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+                        disabled={approvingId === device.deviceId}
+                        onClick={() => void handleApproveDevice(device.deviceId)}
+                      >
+                        {approvingId === device.deviceId ? "Approving..." : "Approve (Unrestricted)"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <div className="control-grid">
         <section className="panel control-section">

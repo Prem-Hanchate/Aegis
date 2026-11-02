@@ -511,6 +511,11 @@ select {
   box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.2);
 }
 
+.status-dot-pending {
+  background: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.25);
+}
+
 .wallet-dot {
   display: inline-block;
   width: 10px;

@@ -34,6 +34,26 @@ export const deviceSchema = new Schema(
       default: "ACTIVE",
       index: true,
     },
+    accessLevel: {
+      type: String,
+      enum: ["TEMPORARY", "UNRESTRICTED"],
+      default: "TEMPORARY",
+      index: true,
+    },
+    isApproved: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    approvedBy: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

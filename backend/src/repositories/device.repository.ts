@@ -7,6 +7,10 @@ export interface DeviceEntity {
   deviceName: string;
   fingerprint: string;
   status: "ACTIVE" | "REVOKED";
+  accessLevel: "TEMPORARY" | "UNRESTRICTED";
+  isApproved: boolean;
+  approvedAt: string | null;
+  approvedBy: string | null;
   createdAt: string;
   lastSeenAt: string;
   revokedAt: string | null;
@@ -22,6 +26,10 @@ function toEntity(doc: any): DeviceEntity {
     deviceName: name,
     fingerprint: doc.fingerprint,
     status: doc.status,
+    accessLevel: doc.accessLevel ?? (doc.isApproved ? "UNRESTRICTED" : "TEMPORARY"),
+    isApproved: Boolean(doc.isApproved || doc.accessLevel === "UNRESTRICTED"),
+    approvedAt: doc.approvedAt ? (doc.approvedAt instanceof Date ? doc.approvedAt.toISOString() : String(doc.approvedAt)) : null,
+    approvedBy: doc.approvedBy ?? null,
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
     lastSeenAt: doc.lastSeenAt instanceof Date ? doc.lastSeenAt.toISOString() : String(doc.lastSeenAt),
     revokedAt: doc.revokedAt ? (doc.revokedAt instanceof Date ? doc.revokedAt.toISOString() : String(doc.revokedAt)) : null,
@@ -36,22 +44,66 @@ export class DeviceRepository {
     name: string;
     fingerprint: string;
     status?: "ACTIVE" | "REVOKED";
+    accessLevel?: "TEMPORARY" | "UNRESTRICTED";
+    isApproved?: boolean;
+    approvedAt?: Date | null;
+    approvedBy?: string | null;
     createdAt?: Date;
     lastSeenAt?: Date;
     replacementOf?: string | null;
   }): Promise<DeviceEntity> {
+    const isApproved = Boolean(data.isApproved || data.accessLevel === "UNRESTRICTED");
+    const accessLevel = data.accessLevel ?? (isApproved ? "UNRESTRICTED" : "TEMPORARY");
     const doc = await DeviceModel.create({
       deviceId: data.deviceId,
       identityId: data.identityId,
       deviceName: data.name.trim(),
       fingerprint: data.fingerprint.trim(),
       status: data.status ?? "ACTIVE",
+      accessLevel,
+      isApproved,
+      approvedAt: data.approvedAt ?? (isApproved ? new Date() : null),
+      approvedBy: data.approvedBy ?? null,
       createdAt: data.createdAt ?? new Date(),
       lastSeenAt: data.lastSeenAt ?? new Date(),
       revokedAt: null,
       replacementOf: data.replacementOf ?? null,
     });
     return toEntity(doc);
+  }
+
+  async approve(deviceId: string, approvedBy: string, now: Date = new Date()): Promise<DeviceEntity | null> {
+    const doc = await DeviceModel.findOneAndUpdate(
+      { deviceId, status: "ACTIVE" },
+      {
+        $set: {
+          accessLevel: "UNRESTRICTED",
+          isApproved: true,
+          approvedAt: now,
+          approvedBy,
+        },
+      },
+      { new: true },
+    )
+      .lean()
+      .exec();
+    return doc ? toEntity(doc) : null;
+  }
+
+  async listPending(): Promise<DeviceEntity[]> {
+    const docs = await DeviceModel.find({
+      status: "ACTIVE",
+      $or: [{ accessLevel: "TEMPORARY" }, { isApproved: false }],
+    })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+    return docs.map(toEntity);
+  }
+
+  async listAll(): Promise<DeviceEntity[]> {
+    const docs = await DeviceModel.find().sort({ createdAt: -1 }).lean().exec();
+    return docs.map(toEntity);
   }
 
   async findById(deviceId: string): Promise<DeviceEntity | null> {

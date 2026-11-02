@@ -215,4 +215,55 @@ describe("Device Lifecycle, Ownership & Security Boundary", () => {
     const me = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${user.accessToken}`);
     expect(me.body.session.deviceId).toBe(replaceResponse.body.device.deviceId);
   });
+
+  it("enrolls device with temporary access, blocks restricted resources until admin approval, and verifies admin approval flow", async () => {
+    const app = createApp();
+    const employee = await createAuthenticatedUser(app, "employee", "Alice Employee");
+    const admin = await createAuthenticatedUser(app, "admin", "Bob Admin");
+
+    // Employee enrolls device -> starts with TEMPORARY access
+    const enrolled = await request(app)
+      .post("/api/devices")
+      .set("Authorization", `Bearer ${employee.accessToken}`)
+      .send({ name: "Employee Laptop", fingerprint: "fp-employee-laptop-1" });
+    expect(enrolled.status).toBe(201);
+    expect(enrolled.body.device.accessLevel).toBe("TEMPORARY");
+    expect(enrolled.body.device.isApproved).toBe(false);
+
+    // Employee attempts to access protected corporate resource -> denied with DEVICE_APPROVAL_REQUIRED
+    const resourceAttempt = await request(app)
+      .get("/api/resources/employee")
+      .set("Authorization", `Bearer ${employee.accessToken}`);
+    expect(resourceAttempt.status).toBe(403);
+    expect(resourceAttempt.body.error.code).toBe("DEVICE_APPROVAL_REQUIRED");
+
+    // Employee cannot approve devices (requires policies:manage)
+    const unauthorizedApproval = await request(app)
+      .patch(`/api/devices/${enrolled.body.device.deviceId}/approve`)
+      .set("Authorization", `Bearer ${employee.accessToken}`);
+    expect(unauthorizedApproval.status).toBe(403);
+
+    // Admin lists pending devices
+    const pendingList = await request(app)
+      .get("/api/devices/pending")
+      .set("Authorization", `Bearer ${admin.accessToken}`);
+    expect(pendingList.status).toBe(200);
+    const foundPending = pendingList.body.devices.find((d: { deviceId: string }) => d.deviceId === enrolled.body.device.deviceId);
+    expect(foundPending).toBeDefined();
+
+    // Admin approves device
+    const approveResponse = await request(app)
+      .patch(`/api/devices/${enrolled.body.device.deviceId}/approve`)
+      .set("Authorization", `Bearer ${admin.accessToken}`);
+    expect(approveResponse.status).toBe(200);
+    expect(approveResponse.body.device.accessLevel).toBe("UNRESTRICTED");
+    expect(approveResponse.body.device.isApproved).toBe(true);
+
+    // Employee now successfully accesses protected corporate resource
+    const allowedResource = await request(app)
+      .get("/api/resources/employee")
+      .set("Authorization", `Bearer ${employee.accessToken}`);
+    expect(allowedResource.status).toBe(200);
+    expect(allowedResource.body.resource).toBe("employee");
+  });
 });

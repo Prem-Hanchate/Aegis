@@ -3,9 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { DeviceManagementPage } from "../src/pages/DeviceManagementPage";
 import { useAuthState, type AuthState } from "../src/context/auth";
 import {
+  approveDevice,
   bindDevice,
   enrollDevice,
   fetchDevices,
+  fetchPendingDevices,
   heartbeatDevice,
   replaceDevice,
   revokeDevice,
@@ -19,6 +21,8 @@ vi.mock("../src/context/auth", () => ({
 
 vi.mock("../src/services/api", () => ({
   fetchDevices: vi.fn(),
+  fetchPendingDevices: vi.fn(),
+  approveDevice: vi.fn(),
   enrollDevice: vi.fn(),
   bindDevice: vi.fn(),
   heartbeatDevice: vi.fn(),
@@ -32,6 +36,8 @@ const mockActiveDevice: DeviceSummary = {
   name: "MacBook Pro Workstation",
   fingerprint: "fp-macbook-pro-2026",
   status: "ACTIVE",
+  accessLevel: "UNRESTRICTED",
+  isApproved: true,
   createdAt: "2026-10-20T10:00:00.000Z",
   lastSeenAt: "2026-10-28T12:00:00.000Z",
 };
@@ -98,6 +104,9 @@ describe("DeviceManagementPage Workflows", () => {
     vi.mocked(fetchDevices).mockResolvedValue({
       devices: [mockActiveDevice, mockUnboundActiveDevice, mockRevokedDevice],
     });
+    vi.mocked(fetchPendingDevices).mockResolvedValue({
+      devices: [],
+    });
   });
 
   describe("Device Inventory & Zero Trust Posture", () => {
@@ -129,6 +138,35 @@ describe("DeviceManagementPage Workflows", () => {
       });
       expect(
         screen.getByText(/Your session is not currently bound to an active device/i),
+      ).toBeInTheDocument();
+    });
+
+    it("displays temporary access posture banner when bound device is pending admin approval", async () => {
+      const mockTemporaryDevice: DeviceSummary = {
+        deviceId: "dev-temp-1111",
+        identityId: "identity-123",
+        name: "Temporary Test Laptop",
+        fingerprint: "fp-temp-laptop-99",
+        status: "ACTIVE",
+        accessLevel: "TEMPORARY",
+        isApproved: false,
+        createdAt: "2026-10-25T10:00:00.000Z",
+        lastSeenAt: "2026-10-28T12:00:00.000Z",
+      };
+      setupAuth("dev-temp-1111");
+      vi.mocked(fetchDevices).mockResolvedValue({
+        devices: [mockTemporaryDevice],
+      });
+
+      render(<DeviceManagementPage />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Session Hardware Binding: Bound & Temporary Access \(Pending Admin Approval\)/i),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText(/Hardware context is recognized, but accessing restricted corporate workspaces/i),
       ).toBeInTheDocument();
     });
 
@@ -466,6 +504,75 @@ describe("DeviceManagementPage Workflows", () => {
       await user.click(bindBtn);
 
       expect(await screen.findByText(/Network connection dropped/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("Administrative Governance & Device Approvals", () => {
+    it("renders pending device approvals and allows administrator to approve unrestricted access", async () => {
+      const user = userEvent.setup();
+      const mockPending: DeviceSummary = {
+        deviceId: "dev-pending-777",
+        identityId: "identity-bob",
+        name: "Bob Employee Laptop",
+        fingerprint: "fp-bob-employee-mac",
+        status: "ACTIVE",
+        accessLevel: "TEMPORARY",
+        isApproved: false,
+        identityDisplayName: "Bob Employee",
+        createdAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+      };
+
+      // Set admin permissions: policies:manage
+      const adminState: AuthState = {
+        status: "authenticated",
+        identity: {
+          identityId: "identity-admin-1",
+          walletAddress: "0x2222222222222222222222222222222222222222",
+          displayName: "Admin Operator",
+          status: "ACTIVE",
+        },
+        session: {
+          sessionId: "session-admin-123",
+          accessToken: "admin-access-token",
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        },
+        deviceId: "dev-active-123456789",
+        roles: ["admin"],
+        permissions: ["policies:manage"],
+        errorMessage: null,
+      };
+
+      vi.mocked(useAuthState).mockReturnValue({
+        state: adminState,
+        setState: vi.fn(),
+        setSession: vi.fn(),
+        setDeviceId: vi.fn(),
+        clearSession: vi.fn(),
+        setError: vi.fn(),
+        setLoading: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(fetchPendingDevices).mockResolvedValue({
+        devices: [mockPending],
+      });
+      vi.mocked(approveDevice).mockResolvedValue({
+        device: { ...mockPending, accessLevel: "UNRESTRICTED", isApproved: true },
+      });
+
+      render(<DeviceManagementPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Pending Device Approvals/i)).toBeInTheDocument();
+        expect(screen.getByText("Bob Employee Laptop")).toBeInTheDocument();
+        expect(screen.getByText("Bob Employee")).toBeInTheDocument();
+      });
+
+      const approveBtn = screen.getByRole("button", { name: /Approve Device \(Grant Unrestricted Access\)/i });
+      await user.click(approveBtn);
+
+      expect(approveDevice).toHaveBeenCalledWith("admin-access-token", "dev-pending-777");
     });
   });
 });
