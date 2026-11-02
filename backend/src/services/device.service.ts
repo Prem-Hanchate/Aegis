@@ -2,7 +2,7 @@ import { pendingDeviceCreations } from "../models/device.model.js";
 import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import { AppError } from "../middleware/AppError.js";
-import { attachDeviceToSession } from "./session.service.js";
+import { attachDeviceToSession, attachDeviceToSessionAsync } from "./session.service.js";
 import { deviceRepository } from "../repositories/device.repository.js";
 
 export type DeviceStatus = "ACTIVE" | "REVOKED";
@@ -103,7 +103,7 @@ export async function enrollDeviceAsync(
     const existing = await deviceRepository.findActiveByFingerprint(identityId, normalizedFingerprint);
     if (existing) {
       devices.set(existing.deviceId, existing);
-      attachDeviceToSession(sessionId, existing.deviceId);
+      await attachDeviceToSessionAsync(sessionId, existing.deviceId);
       return existing;
     }
 
@@ -119,7 +119,7 @@ export async function enrollDeviceAsync(
       replacementOf,
     });
     devices.set(created.deviceId, created);
-    attachDeviceToSession(sessionId, created.deviceId);
+    await attachDeviceToSessionAsync(sessionId, created.deviceId);
     return created;
   }
 

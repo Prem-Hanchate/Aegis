@@ -38,7 +38,7 @@ export function Layout() {
               <span className="nav-group-label">My security</span>
               <NavLink to="/devices" className={navLinkClassName}>My devices</NavLink>
             </div>
-            {state.permissions.some((permission) => ["employee:read", "reports:read", "payroll:read"].includes(permission)) ? (
+             {state.permissions.some((permission) => ["employee:read", "reports:read", "payroll:read"].includes(permission)) ? (
               <div className="nav-group">
                 <span className="nav-group-label">Access</span>
                 {state.permissions.includes("employee:read") ? <NavLink to="/resources/employee" className={navLinkClassName}>Employee</NavLink> : null}

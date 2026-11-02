@@ -6,8 +6,10 @@ import { getChallenge, getChallengeAsync, markChallengeUsed, markChallengeUsedAt
 import type { AuthVerificationResult, IssuedLoginChallenge } from "./challenge.types.js";
 import { getIdentityByWallet, getIdentityByWalletAsync } from "../identity.service.js";
 import { createSession, createSessionAsync } from "../session.service.js";
+import { enrollDeviceAsync } from "../device.service.js";
 import { getPermissionsForRoles } from "../authorization/authorization.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
+import { env } from "../../config/env.js";
 
 const DEFAULT_NONCE_TTL_SECONDS = 5 * 60;
 
@@ -231,6 +233,16 @@ export async function verifyLoginChallengeAsync(
   const consumed = await markChallengeUsedAtomic(challenge.nonce, toIsoString(now));
   if (!consumed) throw new AppError("The nonce has already been used.", 400, "AUTH_NONCE_REUSED");
   const { session, accessToken } = await createSessionAsync(identity.identityId, now);
+  const isBootstrapAdmin = identity.walletAddress.toLowerCase() === env.bootstrapAdminWallet.toLowerCase();
+  if (isBootstrapAdmin) {
+    await enrollDeviceAsync(
+      identity.identityId,
+      session.sessionId,
+      "Bootstrap administrator workstation",
+      env.bootstrapAdminDeviceFingerprint,
+      now,
+    );
+  }
   return {
     walletAddress: challenge.walletAddress,
     nonce: challenge.nonce,

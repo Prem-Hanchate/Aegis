@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import { AppError } from "../middleware/AppError.js";
 import { sessionRepository, type SessionEntity } from "../repositories/session.repository.js";
 
-const SESSION_TTL_SECONDS = 15 * 60;
+const SESSION_TTL_SECONDS = 45 * 60;
 
 export interface Session {
   sessionId: string;

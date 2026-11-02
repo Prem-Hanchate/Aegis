@@ -119,8 +119,8 @@ describe("PHASE 3 — Blockchain-Backed Zero Trust Authorization Engine", () => 
 
     it("rejects access if session has expired", async () => {
       const { accessToken } = setupAuthenticatedEnvironment("employee");
-      // 20 minutes in the future exceeds 15-minute TTL
-      const futureTime = new Date(Date.now() + 20 * 60 * 1000);
+      // 50 minutes in the future exceeds the 45-minute TTL
+      const futureTime = new Date(Date.now() + 50 * 60 * 1000);
 
       await expect(
         evaluateZeroTrustAuthorization({

@@ -18,6 +18,7 @@ const environmentSchema = z.object({
   REVOCATION_REGISTRY_ADDRESS: z.string().optional(),
   BOOTSTRAP_ADMIN_WALLET: z.string().optional().default("0xfe2400b9A20f2A3C824D8D46c68046b0264c6253"),
   BOOTSTRAP_ADMIN_DISPLAY_NAME: z.string().trim().min(1).max(120).default("Aegis Administrator"),
+  BOOTSTRAP_ADMIN_DEVICE_FINGERPRINT: z.string().trim().min(8).optional(),
 });
 
 const parsed = environmentSchema.parse(process.env);
@@ -36,5 +37,7 @@ export const env = {
   revocationRegistryAddress: parsed.REVOCATION_REGISTRY_ADDRESS,
   bootstrapAdminWallet: parsed.BOOTSTRAP_ADMIN_WALLET,
   bootstrapAdminDisplayName: parsed.BOOTSTRAP_ADMIN_DISPLAY_NAME,
+  bootstrapAdminDeviceFingerprint: parsed.BOOTSTRAP_ADMIN_DEVICE_FINGERPRINT
+    ?? `admin-workstation:${parsed.BOOTSTRAP_ADMIN_WALLET.toLowerCase()}`,
   isProduction: parsed.NODE_ENV === "production",
 };
