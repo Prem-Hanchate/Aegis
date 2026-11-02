@@ -61,6 +61,13 @@ export function HealthPage() {
               <strong className="health-value">{health.environment}</strong>
               <small>Last checked {new Date(health.timestamp).toLocaleString()}</small>
             </div>
+            <div className="panel health-card">
+              <span className="meta-label">Blockchain</span>
+              <strong className={`health-value ${!health.blockchain || !health.blockchain.configured || health.blockchain.connected ? "health-value-success" : "health-value-danger"}`}>
+                {!health.blockchain ? "Unavailable" : !health.blockchain.configured ? "Not configured" : health.blockchain.connected ? "Connected" : "Unavailable"}
+              </strong>
+              <small>{health.blockchain?.chainId ? `Chain ${health.blockchain.chainId}` : "No trusted chain configured"}</small>
+            </div>
           </div>
           <details className="panel health-details">
             <summary>Technical response</summary>

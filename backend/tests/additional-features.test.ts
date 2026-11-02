@@ -11,8 +11,8 @@ import { clearAuthorizationState } from "../src/services/authorization/authoriza
 
 async function login(app: ReturnType<typeof createApp>, role = "admin") {
   const wallet = Wallet.createRandom();
-  const identity = registerIdentity(wallet.address, role);
-  assignRole(identity.identityId, role);
+  const identity = await registerIdentity(wallet.address, role);
+  await assignRole(identity.identityId, role);
   const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
   const message = challenge.body.challenge.message as string;
   const signature = await wallet.signMessage(message);
@@ -26,13 +26,13 @@ async function login(app: ReturnType<typeof createApp>, role = "admin") {
 }
 
 describe("additional independent features", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearAuditEvents();
-    clearDeviceStore();
-    clearIdentityStore();
-    clearSessionStore();
-    clearAuthorizationState();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearAuditEvents();
+    await clearDeviceStore();
+    await clearIdentityStore();
+    await clearSessionStore();
+    await clearAuthorizationState();
   });
 
   it("returns the current session and identity", async () => {
@@ -74,7 +74,7 @@ describe("additional independent features", () => {
   it("allows an admin to assign and remove an identity role", async () => {
     const app = createApp();
     const { accessToken } = await login(app);
-    const target = registerIdentity(Wallet.createRandom().address, "Target User");
+    const target = await registerIdentity(Wallet.createRandom().address, "Target User");
 
     const assignResponse = await request(app)
       .patch(`/api/identities/${target.identityId}/roles`)

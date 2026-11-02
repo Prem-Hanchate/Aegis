@@ -55,6 +55,10 @@ export const auditBatchSchema = new Schema(
       default: "ANCHORED",
       index: true,
     },
+    failureReason: {
+      type: String,
+      default: null,
+    },
   },
   {
     collection: "audit_batches",
@@ -66,4 +70,3 @@ export type AuditBatchDocument = InferSchemaType<typeof auditBatchSchema> & { _i
 export const AuditBatchModel: Model<AuditBatchDocument> =
   (mongoose.models?.AuditBatch as Model<AuditBatchDocument>) ||
   model<AuditBatchDocument>("AuditBatch", auditBatchSchema);
-

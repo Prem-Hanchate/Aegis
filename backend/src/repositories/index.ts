@@ -4,4 +4,4 @@ export * from "./challenge.repository.js";
 export * from "./device.repository.js";
 export * from "./policy.repository.js";
 export * from "./audit-log.repository.js";
-
+export * from "./mongodb.js";

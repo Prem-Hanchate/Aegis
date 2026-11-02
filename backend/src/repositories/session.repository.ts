@@ -57,6 +57,15 @@ export class SessionRepository {
     return doc ? toEntity(doc) : null;
   }
 
+  async findActiveByTokenHash(tokenHash: string): Promise<SessionEntity | null> {
+    const doc = await SessionModel.findOne({
+      tokenHash,
+      status: "ACTIVE",
+      expiresAt: { $gt: new Date() },
+    }).lean().exec();
+    return doc ? toEntity(doc) : null;
+  }
+
   async attachDevice(sessionId: string, deviceId: string): Promise<SessionEntity | null> {
     const doc = await SessionModel.findOneAndUpdate(
       { sessionId, status: "ACTIVE" },
@@ -106,4 +115,3 @@ export class SessionRepository {
 }
 
 export const sessionRepository = new SessionRepository();
-

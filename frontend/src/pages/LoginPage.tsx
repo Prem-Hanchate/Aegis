@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthState } from "../context/auth";
-import { ApiError, requestLoginChallenge, verifyLoginChallenge } from "../services/auth";
+import { ApiError, deviceLogin, requestLoginChallenge, verifyLoginChallenge } from "../services/auth";
+import { getBrowserDevice } from "../services/device-crypto";
 import type { AuthChallenge } from "../types/auth";
 
 function shortenAddress(address: string): string {
@@ -21,6 +22,8 @@ export function LoginPage() {
   const [activeChallenge, setActiveChallenge] = useState<AuthChallenge | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(state.errorMessage);
   const [providerAvailable, setProviderAvailable] = useState<boolean>(true);
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
+  const [pairedDevice, setPairedDevice] = useState<boolean>(false);
 
   // Sync with context error message (e.g. from session expiry or account switch)
   useEffect(() => {
@@ -39,7 +42,14 @@ export function LoginPage() {
 
   // Check for Ethereum provider availability on mount
   useEffect(() => {
-    if (typeof window === "undefined" || !window.ethereum) {
+    if (typeof window === "undefined") {
+      setProviderAvailable(false);
+      return;
+    }
+
+    setIsMobileDevice(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+    setPairedDevice(Boolean(getBrowserDevice()));
+    if (!window.ethereum) {
       setProviderAvailable(false);
     } else {
       setProviderAvailable(true);
@@ -137,6 +147,23 @@ export function LoginPage() {
     void handleLogin();
   }
 
+  async function handleDeviceLogin() {
+    setErrorMessage(null);
+    setStep("verifying");
+    try {
+      const response = await deviceLogin();
+      const { identity, session } = response.result;
+      setSession(identity, session, identity.roles, response.result.device.deviceId, identity.permissions ?? []);
+      navigate(identity.roles.includes("admin") ? "/control-center" : "/", { replace: true });
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof ApiError ? error.message : error instanceof Error ? error.message : "Device authentication failed.");
+      setStep("idle");
+    }
+  }
+
+  const metaMaskDappUrl = typeof window === "undefined"
+    ? "https://metamask.io/download/"
+    : `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}${window.location.search}${window.location.hash}`;
   const isBusy = step !== "idle";
 
   return (
@@ -164,17 +191,40 @@ export function LoginPage() {
           Authenticate using your registered Ethereum wallet. Your private key never leaves your device.
         </p>
 
+        {pairedDevice && (
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void handleDeviceLogin()}
+            disabled={isBusy}
+          >
+            {isBusy ? "Authenticating Device..." : "Sign In With This Device"}
+          </button>
+        )}
+
         {!providerAvailable ? (
           <div className="provider-warning" role="alert">
             <strong>MetaMask Not Detected</strong>
-            <p>A Web3 Ethereum provider is required to authenticate with Aegis.</p>
+            <p>
+              {isMobileDevice
+                ? "Open this page in MetaMask Mobile's in-app browser to connect your wallet."
+                : "A Web3 Ethereum provider is required to authenticate with Aegis."}
+            </p>
+            {isMobileDevice && (
+              <a
+                href={metaMaskDappUrl}
+                className="button-link"
+              >
+                Open in MetaMask Mobile ↗
+              </a>
+            )}
             <a
               href="https://metamask.io/download/"
               target="_blank"
               rel="noopener noreferrer"
               className="button-link"
             >
-              Install MetaMask ↗
+              {isMobileDevice ? "Get or install MetaMask ↗" : "Install MetaMask ↗"}
             </a>
           </div>
         ) : (

@@ -11,8 +11,8 @@ import { clearAuthorizationState } from "../src/services/authorization/authoriza
 
 async function loginWithDevice(app: ReturnType<typeof createApp>, role = "admin") {
   const wallet = Wallet.createRandom();
-  const identity = registerIdentity(wallet.address, role);
-  assignRole(identity.identityId, role);
+  const identity = await registerIdentity(wallet.address, role);
+  await assignRole(identity.identityId, role);
   const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
   const message = challenge.body.challenge.message as string;
   const signature = await wallet.signMessage(message);
@@ -30,28 +30,28 @@ async function loginWithDevice(app: ReturnType<typeof createApp>, role = "admin"
 }
 
 describe("independent feature additions", () => {
-  beforeEach(() => {
-    clearChallengeStore();
-    clearAuditEvents();
-    clearDeviceStore();
-    clearIdentityStore();
-    clearSessionStore();
-    clearAuthorizationState();
+  beforeEach(async () => {
+    await clearChallengeStore();
+    await clearAuditEvents();
+    await clearDeviceStore();
+    await clearIdentityStore();
+    await clearSessionStore();
+    await clearAuthorizationState();
   });
 
-  it("reports not_ready when the app process has not connected to MongoDB", async () => {
+  it("reports ready when the required MongoDB dependency is connected", async () => {
     const response = await request(createApp()).get("/api/health/ready");
 
-    expect(response.status).toBe(503);
-    expect(response.body.status).toBe("not_ready");
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("ready");
   });
 
   it("looks up an identity by wallet and updates its profile", async () => {
     const wallet = Wallet.createRandom();
-    const identity = registerIdentity(wallet.address, "Original Name");
+    const identity = await registerIdentity(wallet.address, "Original Name");
     const app = createApp();
 
-    assignRole(identity.identityId, "admin");
+    await assignRole(identity.identityId, "admin");
     const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: wallet.address });
     const message = challenge.body.challenge.message as string;
     const signature = await wallet.signMessage(message);

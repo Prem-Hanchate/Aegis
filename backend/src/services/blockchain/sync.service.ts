@@ -18,6 +18,7 @@ import {
 import {
   assignRoleAsync,
   getIdentity,
+  listIdentities,
   removeRoleAsync,
   updateIdentityStatusAsync,
 } from "../identity.service.js";
@@ -25,6 +26,7 @@ import { revokeDeviceDirectAsync } from "../device.service.js";
 import { revokeSessionsForDeviceAsync, revokeSessionsForIdentityAsync } from "../session.service.js";
 import { grantRolePermissionAsync, revokeRolePermissionAsync } from "../authorization/authorization.service.js";
 import { reconcileTrustedState } from "./reconciliation.service.js";
+import { recordAuditEvent } from "../audit/audit.service.js";
 
 // Known role names mapped to hashes
 const knownRoles = new Map<string, string>([
@@ -213,6 +215,15 @@ export class BlockchainSyncService {
       return { processed: true, duplicate: false };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Event processing failure";
+      recordAuditEvent({
+        eventType: "BLOCKCHAIN_SYNC_FAILURE",
+        identityId: null,
+        resource: "blockchain",
+        action: eventName,
+        outcome: "FAILURE",
+        reason: errorMessage,
+        actor: null,
+      });
       if (isDbConnected()) {
         await BlockchainSyncStateModel.updateOne(
           { chainId, contractAddress: normalizedContract },
@@ -266,7 +277,6 @@ export class BlockchainSyncService {
           }
         }
         break;
-      }
       }
 
       case "IdentityActivated": {
@@ -503,7 +513,12 @@ export class BlockchainSyncService {
 
       // Query raw logs/events for the contract in the range
       const events = await item.contract.queryFilter("*", fromBlock, toBlock);
-      if (events.length > 0) console.log(`[syncBlockRange] ${item.name} found ${events.length} events from ${fromBlock} to ${toBlock}:`, events.map(e => e.eventName));
+      if (events.length > 0) {
+        console.log(
+          `[syncBlockRange] ${item.name} found ${events.length} events from ${fromBlock} to ${toBlock}:`,
+          events.map((event) => ("eventName" in event ? event.eventName : "unknown")),
+        );
+      }
 
 
 

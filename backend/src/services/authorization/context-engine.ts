@@ -5,6 +5,10 @@ export interface RequestContext {
   sessionCreatedAt?: Date | string | null;
   deviceLastSeenAt?: Date | string | null;
   sessionId?: string | null;
+  requestMethod?: string;
+  requestPath?: string;
+  deviceProofTimestamp?: string;
+  deviceProofSignature?: string;
 }
 
 export interface ContextEvaluationResult {
@@ -187,4 +191,3 @@ export function evaluateContextRules(context: RequestContext, config = currentCo
     evaluatedRules,
   };
 }
-

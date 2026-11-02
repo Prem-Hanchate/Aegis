@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { useAuthState } from "../context/auth";
 import {
   bindDevice,
+  approveDevice,
+  pairBrowserDevice,
   enrollDevice,
   fetchDevices,
   heartbeatDevice,
   replaceDevice,
   revokeDevice,
+  updateDevicePermissions,
   type DeviceSummary,
 } from "../services/api";
 import { ApiError } from "../services/auth";
@@ -40,6 +43,8 @@ export function DeviceManagementPage() {
   const [enrollName, setEnrollName] = useState("");
   const [enrollFingerprint, setEnrollFingerprint] = useState("");
   const [enrolling, setEnrolling] = useState(false);
+  const [pairing, setPairing] = useState(false);
+  const [pairName, setPairName] = useState("");
 
   // Revocation Confirmation Dialog State
   const [deviceToRevoke, setDeviceToRevoke] = useState<DeviceSummary | null>(null);
@@ -53,22 +58,61 @@ export function DeviceManagementPage() {
 
   // In-flight action tracking
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
+  const [permissionDrafts, setPermissionDrafts] = useState<Record<string, string>>({});
 
   async function loadDevices() {
     if (!accessToken) return;
     try {
-      const response = await fetchDevices(accessToken);
+      const response = await fetchDevices(accessToken, state.permissions.includes("policies:manage") ? { scope: "all" } : {});
       setDevices(response.devices);
     } catch (error: unknown) {
       handleApiError(error, "Failed to load devices.");
     } finally {
       setLoading(false);
     }
+
   }
 
   useEffect(() => {
     void loadDevices();
   }, [accessToken]);
+
+  async function handleApprove(device: DeviceSummary) {
+    clearAlerts();
+    if (!accessToken) return;
+    setActionInProgressId(device.deviceId);
+    try {
+      await approveDevice(accessToken, device.deviceId);
+      setSuccessMessage(`Device "${device.name}" approved. The device must now provide signed proofs.`);
+      await loadDevices();
+    } catch (error: unknown) {
+      handleApiError(error, "Device approval failed.");
+    } finally {
+      setActionInProgressId(null);
+    }
+
+    async function handlePairBrowser(event: React.FormEvent) {
+      event.preventDefault();
+      clearAlerts();
+      if (!accessToken) return;
+      const name = pairName.trim();
+      if (!name) {
+        setErrorMessage("Device name is required.");
+        return;
+      }
+      setPairing(true);
+      try {
+        const response = await pairBrowserDevice(accessToken, name);
+        setPairName("");
+        setSuccessMessage(`"${response.device.name}" is paired and awaiting administrator approval.`);
+        await loadDevices();
+      } catch (error: unknown) {
+        handleApiError(error, "Browser device pairing failed.");
+      } finally {
+        setPairing(false);
+      }
+    }
+  }
 
   function handleApiError(error: unknown, defaultMessage: string) {
     if (error instanceof ApiError) {
@@ -157,6 +201,22 @@ export function DeviceManagementPage() {
     } finally {
       setActionInProgressId(null);
     }
+
+    async function handlePermissionsSave(device: DeviceSummary) {
+      if (!accessToken) return;
+      clearAlerts();
+      setActionInProgressId(device.deviceId);
+      try {
+        const permissions = (permissionDrafts[device.deviceId] ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+        const response = await updateDevicePermissions(accessToken, device.deviceId, permissions);
+        setDevices((current) => current.map((item) => item.deviceId === device.deviceId ? response.device : item));
+        setSuccessMessage(permissions.length ? `Permissions restricted for "${device.name}".` : `Permissions for "${device.name}" now inherit the account roles.`);
+      } catch (error: unknown) {
+        handleApiError(error, "Failed to update device permissions.");
+      } finally {
+        setActionInProgressId(null);
+      }
+    }
   }
 
   // --- Revocation ---
@@ -231,7 +291,7 @@ export function DeviceManagementPage() {
           <p className="eyebrow">Zero Trust Hardware Posture</p>
           <h2>Device Management</h2>
           <p className="muted-text">
-            Enroll, bind, and monitor trusted hardware. Every protected resource request validates the hardware context of your active session.
+            Approve cryptographic device identities, bind them to sessions, and revoke their access to protected Aegis resources.
           </p>
         </div>
       </div>
@@ -283,16 +343,46 @@ export function DeviceManagementPage() {
       )}
 
       <div className="device-grid">
+        <div className="panel enroll-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Browser pairing</p>
+              <h3>Add this physical device</h3>
+            </div>
+          </div>
+          <p className="muted-text">
+            This browser generates a device key locally. The private key stays on this phone or computer;
+            Aegis receives only the public key.
+          </p>
+          <form onSubmit={(event) => void handlePairBrowser(event)} className="enroll-form">
+            <div className="form-group">
+              <label htmlFor="pair-name">Pairing Name</label>
+              <input
+                id="pair-name"
+                type="text"
+                placeholder="e.g. My phone"
+                value={pairName}
+                onChange={(event) => setPairName(event.target.value)}
+                disabled={pairing}
+                required
+              />
+            </div>
+            <button type="submit" className="primary-button" disabled={pairing}>
+              {pairing ? "Pairing..." : "Pair This Browser"}
+            </button>
+          </form>
+        </div>
         {/* Enrollment Card */}
         <div className="panel enroll-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Enrollment</p>
-              <h3>Enroll New Device</h3>
+              <h3>Legacy browser record</h3>
             </div>
           </div>
           <p className="muted-text">
-            Register hardware for your identity. Enrolling automatically binds the device to your active session.
+            This compatibility flow records a browser fingerprint only. For actual device trust, use
+            <code>node tools/device-agent.mjs pair</code>, then approve the pending cryptographic device below.
           </p>
 
           <form onSubmit={(e) => void handleEnroll(e)} className="enroll-form">
@@ -311,7 +401,7 @@ export function DeviceManagementPage() {
 
             <div className="form-group">
               <div className="label-row">
-                <label htmlFor="enroll-fingerprint">Hardware Fingerprint</label>
+                <label htmlFor="enroll-fingerprint">Hardware Fingerprint (legacy browser record)</label>
                 <button
                   type="button"
                   className="quick-action-link"
@@ -409,10 +499,22 @@ export function DeviceManagementPage() {
                           {device.deviceId.slice(0, 12)}...
                         </code>
                       </div>
+                      <label className="device-permissions-editor">
+                        <span className="meta-label">Device permissions</span>
+                        <input
+                          value={permissionDrafts[device.deviceId] ?? (device.permissions ?? []).join(", ")}
+                          onChange={(event) => setPermissionDrafts((current) => ({ ...current, [device.deviceId]: event.target.value }))}
+                          placeholder="reports:read, employee:read (empty = inherit account)"
+                          disabled={device.status !== "ACTIVE" || device.approvalStatus === "PENDING" || isBusy}
+                        />
+                        <button type="button" className="quiet-button action-btn" disabled={isBusy || device.approvalStatus === "PENDING"} onClick={() => void handlePermissionsSave(device)}>
+                          Save Permissions
+                        </button>
+                      </label>
                       <div>
                         <span className="meta-label">Fingerprint</span>
                         <code className="meta-code" title={device.fingerprint}>
-                          {device.fingerprint}
+                          {device.publicKey ? "Cryptographic key registered" : device.fingerprint}
                         </code>
                       </div>
                       <div>
@@ -431,7 +533,20 @@ export function DeviceManagementPage() {
 
                     {device.status === "ACTIVE" ? (
                       <div className="device-actions">
-                        {!isCurrent && (
+                        {device.approvalStatus === "PENDING" && state.permissions.includes("policies:manage") && (
+                          <button
+                            type="button"
+                            className="button button-primary"
+                            disabled={actionInProgressId === device.deviceId}
+                            onClick={() => void handleApprove(device)}
+                          >
+                            {actionInProgressId === device.deviceId ? "Approving..." : "Approve Device"}
+                          </button>
+                        )}
+                        {device.approvalStatus === "PENDING" && (
+                          <span className="muted-text">Awaiting administrator approval</span>
+                        )}
+                        {!isCurrent && device.approvalStatus !== "PENDING" && (
                           <button
                             type="button"
                             className="quiet-button action-btn"

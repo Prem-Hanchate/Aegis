@@ -2,6 +2,13 @@
 
 This document is the Markdown project update for the requirements in **Aegis all Features and Update.docx**. It records the current implementation status, ownership by person, dependencies, and the work completed in the current development cycle.
 
+> **Current device-trust status:** The implemented Aegis boundary is
+> application/API access control. Cryptographic device pairing, administrator
+> approval, signed heartbeats/protected-request proofs, and immediate Aegis
+> access revocation are now available through the device API and
+> `tools/device-agent.mjs`. Aegis does not claim operating-system, hardware,
+> file, process, or lock-screen management.
+
 ## 1. Project Goal
 
 Aegis is a decentralized identity and Zero Trust access controller.

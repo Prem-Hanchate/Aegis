@@ -17,6 +17,7 @@ import {
 import {
   clearDeviceStore,
   enrollDevice,
+  getDevice,
   revokeDevice,
 } from "../src/services/device.service.js";
 import {
@@ -80,9 +81,10 @@ describe("PHASE 3 — Blockchain-Backed Zero Trust Authorization Engine", () => 
     });
 
     it("rejects access immediately if identity is revoked", async () => {
-      const { accessToken, identity } = setupAuthenticatedEnvironment("employee");
+      const { accessToken, identity, device } = setupAuthenticatedEnvironment("employee");
       updateIdentityStatus(identity.identityId, "REVOKED");
 
+      expect(getDevice(device.deviceId).status).toBe("REVOKED");
       await expect(
         evaluateZeroTrustAuthorization({
           accessToken,
@@ -362,6 +364,43 @@ describe("PHASE 3 — Blockchain-Backed Zero Trust Authorization Engine", () => 
           clientOverride: mockClient,
         })
       ).rejects.toThrow("Device is revoked on blockchain.");
+    });
+
+    it("fails closed when authoritative blockchain verification is unavailable", async () => {
+      const { accessToken } = setupAuthenticatedEnvironment("employee");
+      const failingClient = {
+        isIdentityRevoked: async () => {
+          throw new Error("RPC unavailable");
+        },
+        isDeviceRevoked: async () => false,
+      } as any;
+
+      await expect(
+        evaluateZeroTrustAuthorization({
+          accessToken,
+          resource: "employee",
+          action: "read",
+          clientOverride: failingClient,
+        }),
+      ).rejects.toMatchObject({ code: "BLOCKCHAIN_TRUST_UNAVAILABLE", statusCode: 503 });
+    });
+
+    it("denies access when the requested permission is revoked on blockchain", async () => {
+      const { accessToken } = setupAuthenticatedEnvironment("employee");
+      const mockClient = {
+        isIdentityRevoked: async () => false,
+        isDeviceRevoked: async () => false,
+        isPermissionRevoked: async () => true,
+      } as any;
+
+      await expect(
+        evaluateZeroTrustAuthorization({
+          accessToken,
+          resource: "employee",
+          action: "read",
+          clientOverride: mockClient,
+        }),
+      ).rejects.toThrow("Permission is revoked on blockchain.");
     });
   });
 });

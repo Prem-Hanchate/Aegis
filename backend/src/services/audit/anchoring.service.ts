@@ -65,6 +65,7 @@ export async function batchAndAnchorAuditLogs(batchLimit = 50, clientOverride?: 
 
     let txHash: string | null = null;
     let blockNumber: number | null = null;
+    let failureReason: string | null = null;
 
     // Blockchain anchoring attempt
     let client: BlockchainClient | null = clientOverride ?? null;
@@ -93,8 +94,11 @@ export async function batchAndAnchorAuditLogs(batchLimit = 50, clientOverride?: 
         txHash = receipt.hash;
         blockNumber = receipt.blockNumber;
       } catch (error) {
+        failureReason = error instanceof Error ? error.message : "Blockchain audit anchoring transaction failed.";
         console.error("Blockchain audit anchoring transaction failed:", error);
       }
+    } else {
+      failureReason = "AuditRegistry blockchain client is unavailable.";
     }
 
     // Save batch record
@@ -109,8 +113,18 @@ export async function batchAndAnchorAuditLogs(batchLimit = 50, clientOverride?: 
       txHash,
       blockNumber,
       anchoredAt: new Date(),
-      status: "ANCHORED",
+      status: failureReason ? "FAILED" : "ANCHORED",
+      failureReason,
     });
+
+    if (failureReason) {
+      throw new AppError(
+        "Audit batch anchoring failed; the batch remains retryable.",
+        503,
+        "AUDIT_ANCHORING_FAILED",
+        { batchId, reason: failureReason },
+      );
+    }
 
     // Update audit log documents with batch details
     await Promise.all(

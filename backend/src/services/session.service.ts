@@ -108,8 +108,11 @@ export function getActiveSession(accessToken: string, now = new Date()): Session
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   });
 
-  if (!session || session.status !== "ACTIVE") {
+  if (!session) {
     throw new AppError("The session is invalid or revoked.", 401, "SESSION_INVALID");
+  }
+  if (session.status !== "ACTIVE") {
+    throw new AppError("The session is invalid or revoked.", 401, "SESSION_INVALID", { revoked: true });
   }
   if (now >= new Date(session.expiresAt)) {
     throw new AppError("The session has expired.", 401, "SESSION_EXPIRED");

@@ -11,7 +11,7 @@ describe("health endpoint", () => {
       service: "aegis-backend",
       environment: expect.any(String),
       database: {
-        connected: false,
+        connected: true,
       },
     });
   });

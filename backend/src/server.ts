@@ -7,6 +7,7 @@ import {
   registerIdentity,
   updateIdentityStatus,
 } from "./services/identity.service.js";
+import { getBlockchainRuntimeStatus, startBlockchainRuntime, stopBlockchainRuntime } from "./services/blockchain/runtime.js";
 
 function bootstrapAdmin() {
   if (env.isProduction || !env.bootstrapAdminWallet) {
@@ -24,6 +25,13 @@ function bootstrapAdmin() {
 async function bootstrap() {
   await connectDatabase();
   bootstrapAdmin();
+  try {
+    await startBlockchainRuntime();
+    console.log("Blockchain runtime initialized.");
+  } catch (error) {
+    if (env.isProduction) throw error;
+    console.error("Blockchain runtime is unavailable; configured blockchain authorization will fail closed.", error);
+  }
 
   const app = createApp();
   const server = app.listen(env.port, () => {
@@ -37,6 +45,7 @@ async function bootstrap() {
         console.error("Failed to close the HTTP server cleanly.", error);
         process.exitCode = 1;
       }
+      stopBlockchainRuntime();
       await disconnectDatabase();
     });
   };

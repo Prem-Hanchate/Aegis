@@ -1,5 +1,6 @@
 import type { BackendHealthResponse } from "../types/health";
 import { ApiError } from "./auth";
+import { createBrowserDeviceKey, signBrowserDeviceProof, storeBrowserDevice } from "./device-crypto";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -43,6 +44,32 @@ export function requestProtectedJson<T>(
   accessToken: string,
   init: RequestInit = {},
 ): Promise<T> {
+  const storedSession = typeof window !== "undefined" ? sessionStorage.getItem("aegis.auth.session") : null;
+  let sessionId: string | undefined;
+  if (storedSession) {
+    try {
+      sessionId = (JSON.parse(storedSession) as { session?: { sessionId?: string } }).session?.sessionId;
+    } catch {
+      sessionId = undefined;
+    }
+  }
+  const timestamp = new Date().toISOString();
+  const proof = sessionId
+    ? signBrowserDeviceProof({
+        sessionId,
+        method: init.method ?? "GET",
+        path: `/api${path}`,
+        timestamp,
+      })
+    : null;
+  const requestHeaders: Record<string, string> = {
+    ...((init.headers ?? {}) as Record<string, string>),
+  };
+  if (proof) {
+    requestHeaders["X-Aegis-Device-Timestamp"] = proof.timestamp;
+    requestHeaders["X-Aegis-Device-Signature"] = proof.signature;
+  }
+  init = { ...init, headers: requestHeaders };
   return requestJson<T>(path, {
     ...init,
     headers: {
@@ -79,15 +106,32 @@ export interface DeviceSummary {
   createdAt?: string;
   lastSeenAt: string;
   revokedAt?: string | null;
+  publicKey?: string | null;
+  approvalStatus?: "LEGACY" | "PENDING" | "APPROVED";
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  permissions?: string[];
+}
+
+export function updateDevicePermissions(
+  accessToken: string,
+  deviceId: string,
+  permissions: string[],
+): Promise<{ device: DeviceSummary }> {
+  return requestProtectedJson<{ device: DeviceSummary }>(`/devices/${deviceId}/permissions`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ permissions }),
+  });
 }
 
 export function fetchDevices(
   accessToken: string,
-  filters: { status?: "ACTIVE" | "REVOKED"; seenSince?: string } = {},
+  filters: { status?: "ACTIVE" | "REVOKED"; seenSince?: string; scope?: "all" } = {},
 ): Promise<{ devices: DeviceSummary[] }> {
   const query = new URLSearchParams();
   if (filters.status) query.set("status", filters.status);
   if (filters.seenSince) query.set("seenSince", filters.seenSince);
+  if (filters.scope) query.set("scope", filters.scope);
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return requestProtectedJson<{ devices: DeviceSummary[] }>(`/devices${queryString}`, accessToken);
 }
@@ -99,6 +143,41 @@ export function enrollDevice(
   return requestProtectedJson<{ device: DeviceSummary }>("/devices", accessToken, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function pairDevice(
+  accessToken: string,
+  payload: { name: string; publicKey: string },
+): Promise<{ device: DeviceSummary }> {
+  return requestProtectedJson<{ device: DeviceSummary }>("/devices/pair", accessToken, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function pairBrowserDevice(
+  accessToken: string,
+  name: string,
+): Promise<{ device: DeviceSummary }> {
+  const key = createBrowserDeviceKey(name);
+  const response = await pairDevice(accessToken, {
+    name,
+    publicKey: key.publicKey,
+  });
+  storeBrowserDevice({
+    ...key,
+    deviceId: response.device.deviceId,
+  });
+  return response;
+}
+
+export function approveDevice(
+  accessToken: string,
+  deviceId: string,
+): Promise<{ device: DeviceSummary }> {
+  return requestProtectedJson<{ device: DeviceSummary }>(`/devices/${deviceId}/approve`, accessToken, {
+    method: "PATCH",
   });
 }
 
@@ -291,6 +370,38 @@ export function fetchAuditSummary(accessToken: string): Promise<{
   return requestProtectedJson<{
     summary: { total: number; byOutcome: Record<string, number>; byEventType: Record<string, number> };
   }>("/audit/summary", accessToken);
+}
+
+export interface AuditBatch {
+  batchId: number;
+  rootHash: string;
+  batchSize: number;
+  txHash: string | null;
+  blockNumber: number | null;
+  status: "ANCHORED" | "FAILED" | "PENDING";
+  failureReason?: string | null;
+  anchoredAt: string;
+}
+
+export function fetchAuditBatches(accessToken: string): Promise<{ batches: AuditBatch[] }> {
+  return requestProtectedJson<{ batches: AuditBatch[] }>("/audit/batches", accessToken);
+}
+
+export function anchorAuditBatch(accessToken: string, limit = 50): Promise<{ batch: AuditBatch }> {
+  return requestProtectedJson<{ batch: AuditBatch }>("/audit/anchor", accessToken, {
+    method: "POST",
+    body: JSON.stringify({ limit }),
+  });
+}
+
+export interface AuditBatchVerification {
+  batchId: number;
+  valid: boolean;
+  invalidEventIds: string[];
+}
+
+export function verifyAuditBatch(accessToken: string, batchId: number): Promise<{ verification: AuditBatchVerification }> {
+  return requestProtectedJson<{ verification: AuditBatchVerification }>(`/audit/batches/${batchId}/verify`, accessToken);
 }
 
 export function revokeAllSessions(accessToken: string): Promise<{ revokedCount: number }> {

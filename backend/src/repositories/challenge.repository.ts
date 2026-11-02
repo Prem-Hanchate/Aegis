@@ -84,10 +84,13 @@ export class ChallengeRepository {
     return doc ? toEntity(doc) : null;
   }
 
+  async claim(nonce: string, now: Date = new Date()): Promise<ChallengeEntity | null> {
+    return this.consumeAtomic(nonce, now);
+  }
+
   async clear(): Promise<void> {
     await ChallengeModel.deleteMany({}).exec();
   }
 }
 
 export const challengeRepository = new ChallengeRepository();
-

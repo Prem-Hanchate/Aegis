@@ -11,8 +11,8 @@ import { clearAuthorizationState } from "../src/services/authorization/authoriza
 
 async function loginAsAdmin(app: ReturnType<typeof createApp>) {
   const adminWallet = Wallet.createRandom();
-  const admin = registerIdentity(adminWallet.address, "Administrator");
-  assignRole(admin.identityId, "admin");
+  const admin = await registerIdentity(adminWallet.address, "Administrator");
+  await assignRole(admin.identityId, "admin");
   const challenge = await request(app).post("/api/auth/challenge").send({ walletAddress: adminWallet.address });
   const message = challenge.body.challenge.message as string;
   const signature = await adminWallet.signMessage(message);
@@ -25,11 +25,11 @@ async function loginAsAdmin(app: ReturnType<typeof createApp>) {
 }
 
 describe("identity endpoints", () => {
-  beforeEach(() => {
-    clearIdentityStore();
-    clearChallengeStore();
-    clearSessionStore();
-    clearAuthorizationState();
+  beforeEach(async () => {
+    await clearIdentityStore();
+    await clearChallengeStore();
+    await clearSessionStore();
+    await clearAuthorizationState();
   });
 
   it("registers, lists, reads, and revokes an identity", async () => {

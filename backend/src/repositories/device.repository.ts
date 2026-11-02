@@ -6,6 +6,11 @@ export interface DeviceEntity {
   name: string;
   deviceName: string;
   fingerprint: string;
+  publicKey: string | null;
+  permissions: string[];
+  approvalStatus: "LEGACY" | "PENDING" | "APPROVED";
+  approvedAt: string | null;
+  approvedBy: string | null;
   status: "ACTIVE" | "REVOKED";
   createdAt: string;
   lastSeenAt: string;
@@ -21,6 +26,11 @@ function toEntity(doc: any): DeviceEntity {
     name,
     deviceName: name,
     fingerprint: doc.fingerprint,
+    publicKey: doc.publicKey ?? null,
+    permissions: [...(doc.permissions ?? [])],
+    approvalStatus: doc.approvalStatus ?? "LEGACY",
+    approvedAt: doc.approvedAt ? (doc.approvedAt instanceof Date ? doc.approvedAt.toISOString() : String(doc.approvedAt)) : null,
+    approvedBy: doc.approvedBy ?? null,
     status: doc.status,
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
     lastSeenAt: doc.lastSeenAt instanceof Date ? doc.lastSeenAt.toISOString() : String(doc.lastSeenAt),
@@ -35,6 +45,11 @@ export class DeviceRepository {
     identityId: string;
     name: string;
     fingerprint: string;
+    publicKey?: string | null;
+    permissions?: string[];
+    approvalStatus?: "LEGACY" | "PENDING" | "APPROVED";
+    approvedAt?: Date | null;
+    approvedBy?: string | null;
     status?: "ACTIVE" | "REVOKED";
     createdAt?: Date;
     lastSeenAt?: Date;
@@ -45,6 +60,11 @@ export class DeviceRepository {
       identityId: data.identityId,
       deviceName: data.name.trim(),
       fingerprint: data.fingerprint.trim(),
+      publicKey: data.publicKey ?? null,
+      permissions: data.permissions ?? [],
+      approvalStatus: data.approvalStatus ?? "LEGACY",
+      approvedAt: data.approvedAt ?? null,
+      approvedBy: data.approvedBy ?? null,
       status: data.status ?? "ACTIVE",
       createdAt: data.createdAt ?? new Date(),
       lastSeenAt: data.lastSeenAt ?? new Date(),
@@ -85,6 +105,14 @@ export class DeviceRepository {
     return docs.map(toEntity);
   }
 
+  async listAll(filter: { status?: "ACTIVE" | "REVOKED"; seenSince?: Date } = {}): Promise<DeviceEntity[]> {
+    const query: Record<string, any> = {};
+    if (filter.status) query.status = filter.status;
+    if (filter.seenSince) query.lastSeenAt = { $gte: filter.seenSince };
+    const docs = await DeviceModel.find(query).sort({ createdAt: -1 }).lean().exec();
+    return docs.map(toEntity);
+  }
+
   async revoke(deviceId: string, identityId: string, revokedAt: Date = new Date()): Promise<DeviceEntity | null> {
     const doc = await DeviceModel.findOneAndUpdate(
       { deviceId, identityId, status: "ACTIVE" },
@@ -93,6 +121,24 @@ export class DeviceRepository {
     )
       .lean()
       .exec();
+    return doc ? toEntity(doc) : null;
+  }
+
+  async approve(deviceId: string, approvedBy: string, approvedAt: Date = new Date()): Promise<DeviceEntity | null> {
+    const doc = await DeviceModel.findOneAndUpdate(
+      { deviceId, status: "ACTIVE", approvalStatus: "PENDING" },
+      { $set: { approvalStatus: "APPROVED", approvedAt, approvedBy } },
+      { new: true },
+    ).lean().exec();
+    return doc ? toEntity(doc) : null;
+  }
+
+  async updatePermissions(deviceId: string, permissions: string[]): Promise<DeviceEntity | null> {
+    const doc = await DeviceModel.findOneAndUpdate(
+      { deviceId, status: "ACTIVE" },
+      { $set: { permissions } },
+      { new: true },
+    ).lean().exec();
     return doc ? toEntity(doc) : null;
   }
 
@@ -124,4 +170,3 @@ export class DeviceRepository {
 }
 
 export const deviceRepository = new DeviceRepository();
-
