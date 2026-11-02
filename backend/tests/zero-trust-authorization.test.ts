@@ -52,7 +52,10 @@ describe("PHASE 3 — Blockchain-Backed Zero Trust Authorization Engine", () => 
       identity.identityId,
       session.sessionId,
       "Corporate MacBook",
-      "fingerprint-secure-hw-001"
+      "fingerprint-secure-hw-001",
+      new Date(),
+      null,
+      { accessLevel: "UNRESTRICTED", isApproved: true },
     );
 
     return {
@@ -134,6 +137,61 @@ describe("PHASE 3 — Blockchain-Backed Zero Trust Authorization Engine", () => 
   });
 
   describe("3. Device Validation (Zero Trust Hardware Boundary)", () => {
+    it("rejects access to protected corporate resources when device has temporary access only (pending admin approval)", async () => {
+      const wallet = Wallet.createRandom();
+      const identity = registerIdentity(wallet.address, "Temporary Device User");
+      assignRole(identity.identityId, "employee");
+      const { session, accessToken } = createSession(identity.identityId);
+      enrollDevice(
+        identity.identityId,
+        session.sessionId,
+        "Unapproved Laptop",
+        "fp-temporary-12345",
+      );
+
+      await expect(
+        evaluateZeroTrustAuthorization({
+          accessToken,
+          resource: "employee",
+          action: "read",
+        }),
+      ).rejects.toThrow(/temporary access only/i);
+    });
+
+    it("grants access to protected corporate resources once administrator approves the device", async () => {
+      const wallet = Wallet.createRandom();
+      const identity = registerIdentity(wallet.address, "Approved Device User");
+      assignRole(identity.identityId, "employee");
+      const { session, accessToken } = createSession(identity.identityId);
+      const device = enrollDevice(
+        identity.identityId,
+        session.sessionId,
+        "Laptop To Approve",
+        "fp-to-approve-12345",
+      );
+
+      // Initially rejected
+      await expect(
+        evaluateZeroTrustAuthorization({
+          accessToken,
+          resource: "employee",
+          action: "read",
+        }),
+      ).rejects.toThrow(/temporary access only/i);
+
+      // Admin approves device
+      const { approveDevice } = await import("../src/services/device.service.js");
+      approveDevice(device.deviceId, "admin-identity-id");
+
+      // Now access is allowed
+      const result = await evaluateZeroTrustAuthorization({
+        accessToken,
+        resource: "employee",
+        action: "read",
+      });
+      expect(result.allowed).toBe(true);
+    });
+
     it("rejects access if session is not bound to an enrolled device", async () => {
       const wallet = Wallet.createRandom();
       const identity = registerIdentity(wallet.address, "No Device User");

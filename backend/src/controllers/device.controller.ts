@@ -2,10 +2,12 @@ import type { Request, Response } from "express";
 import { AppError } from "../middleware/AppError.js";
 import { submitBlockchainWrite } from "../services/blockchain.service.js";
 import {
+  approveDeviceAsync,
   enrollDevice,
   getActiveDevice,
   heartbeatDevice,
   listDevicesForIdentityWithFilter,
+  listPendingDevicesAsync,
   replaceDevice,
   revokeDevice,
   type DeviceStatus,
@@ -21,6 +23,38 @@ export function createDeviceController(request: Request, response: Response) {
   recordAuditEvent({ eventType: "ADMIN_ACTION", identityId: auth.identityId, resource: "devices", action: "enroll", outcome: "SUCCESS", reason: "Device enrolled.", actor: auth.identityId });
   recordAuditEvent({ eventType: "DEVICE_ENROLLED", identityId: auth.identityId, resource: "devices", action: "enroll", outcome: "SUCCESS", reason: "Device enrolled.", actor: auth.identityId });
   return response.status(201).json({ device });
+}
+
+export async function approveDeviceController(request: Request, response: Response) {
+  const { auth } = requireAuthenticatedRequest(request);
+  const deviceId = getDeviceId(request);
+  const device = await approveDeviceAsync(deviceId, auth.identityId);
+  recordAuditEvent({
+    eventType: "ADMIN_ACTION",
+    identityId: auth.identityId,
+    resource: "devices",
+    action: "approve",
+    outcome: "SUCCESS",
+    reason: `Device ${deviceId} approved for unrestricted access.`,
+    actor: auth.identityId,
+  });
+  recordAuditEvent({
+    eventType: "DEVICE_APPROVED",
+    identityId: device.identityId,
+    deviceId: device.deviceId,
+    resource: "devices",
+    action: "approve",
+    outcome: "SUCCESS",
+    reason: "Device approved for unrestricted access.",
+    actor: auth.identityId,
+  });
+  return response.status(200).json({ device });
+}
+
+export async function listPendingDevicesController(request: Request, response: Response) {
+  requireAuthenticatedRequest(request);
+  const devices = await listPendingDevicesAsync();
+  return response.status(200).json({ devices });
 }
 
 export function listDevicesController(request: Request, response: Response) {

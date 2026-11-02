@@ -241,6 +241,8 @@ export async function verifyLoginChallengeAsync(
       "Bootstrap administrator workstation",
       env.bootstrapAdminDeviceFingerprint,
       now,
+      null,
+      { accessLevel: "UNRESTRICTED", isApproved: true },
     );
   }
   return {

@@ -14,6 +14,7 @@ export function ResourcePage() {
   const [data, setData] = useState<string | null>(null);
   const [identityId, setIdentityId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +24,7 @@ export function ResourcePage() {
     setIdentityId(null);
     setError(null);
     setForbidden(false);
+    setIsPendingApproval(false);
     setLoading(true);
     void fetchResource(state.session.accessToken, resourceName)
       .then((response) => {
@@ -33,6 +35,9 @@ export function ResourcePage() {
         if (requestError instanceof ApiError && requestError.status === 403) {
           setForbidden(true);
           setError(requestError.message);
+          if (requestError.code === "DEVICE_APPROVAL_REQUIRED") {
+            setIsPendingApproval(true);
+          }
         } else {
           setError(requestError instanceof Error ? requestError.message : "The resource could not be loaded.");
         }
@@ -47,7 +52,25 @@ export function ResourcePage() {
         <h2>{resourceName} workspace</h2>
         <p>Access is evaluated by the backend using your active identity, session, enrolled device, role, and permission.</p>
         {data ? <div className="access-result access-granted"><span className="status-dot" /><strong>Access allowed</strong><p>{data}</p><small>Response identity: {identityId}</small></div> : null}
-        {error ? <div className="access-result access-denied"><strong>{forbidden ? "Access denied by policy" : "Resource unavailable"}</strong><p>{error}</p><small>{forbidden ? "Your session and device were recognized, but the backend denied this resource." : "Check the network connection and try again."}</small></div> : null}
+        {error ? (
+          <div className="access-result access-denied">
+            <strong>
+              {isPendingApproval
+                ? "Administrator Device Approval Required"
+                : forbidden
+                ? "Access denied by policy"
+                : "Resource unavailable"}
+            </strong>
+            <p>{error}</p>
+            <small>
+              {isPendingApproval
+                ? "Your enrolled device has Temporary Access. An administrator must approve unrestricted access in the Control Center or Device Management before this workspace is unlocked."
+                : forbidden
+                ? "Your session and device were recognized, but the backend denied this resource."
+                : "Check the network connection and try again."}
+            </small>
+          </div>
+        ) : null}
         {loading ? <p className="muted-text">Checking your authorization...</p> : null}
       </div>
     </section>

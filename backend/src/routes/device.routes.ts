@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import {
+  approveDeviceController,
   bindDeviceController,
   createDeviceController,
   listDevicesController,
+  listPendingDevicesController,
   replaceDeviceController,
   revokeDeviceController,
   heartbeatDeviceController,
@@ -11,6 +13,7 @@ import {
 import { authenticateRequest } from "../middleware/authentication.js";
 import { validateBody } from "../middleware/requestValidator.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
+import { requireAuthorization } from "../services/authorization/authorization.service.js";
 
 const deviceSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -20,8 +23,10 @@ const deviceSchema = z.object({
 export const deviceRouter = Router();
 deviceRouter.use(authenticateRequest);
 
+deviceRouter.get("/pending", requireAuthorization("policies", "manage"), asyncHandler(listPendingDevicesController));
 deviceRouter.post("/", validateBody(deviceSchema), createDeviceController);
 deviceRouter.get("/", listDevicesController);
+deviceRouter.patch("/:deviceId/approve", requireAuthorization("policies", "manage"), asyncHandler(approveDeviceController));
 deviceRouter.patch("/:deviceId/revoke", asyncHandler(revokeDeviceController));
 deviceRouter.post("/:deviceId/replace", validateBody(deviceSchema), asyncHandler(replaceDeviceController));
 deviceRouter.post("/:deviceId/heartbeat", heartbeatDeviceController);

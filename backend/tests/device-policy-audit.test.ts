@@ -22,10 +22,12 @@ async function loginWithRole(app: ReturnType<typeof createApp>, role: string) {
     signature,
   });
   const accessToken = verified.body.result.session.accessToken as string;
-  await request(app).post("/api/devices").set("Authorization", `Bearer ${accessToken}`).send({
+  const deviceRes = await request(app).post("/api/devices").set("Authorization", `Bearer ${accessToken}`).send({
     name: `${role} device`,
     fingerprint: `${role}-fingerprint-1234`,
   });
+  const { approveDevice } = await import("../src/services/device.service.js");
+  approveDevice(deviceRes.body.device.deviceId, "admin-bootstrap");
   return accessToken;
 }
 

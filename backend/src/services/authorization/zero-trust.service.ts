@@ -175,6 +175,31 @@ export async function evaluateZeroTrustAuthorization(
     throw new AppError("The device is revoked.", 403, "DEVICE_REVOKED");
   }
 
+  if (device.accessLevel === "TEMPORARY" || !device.isApproved) {
+    recordAuditEvent(
+      {
+        eventType: "ACCESS_DECISION",
+        identityId: identity.identityId,
+        deviceId: device.deviceId,
+        resource,
+        action,
+        outcome: "DENIED",
+        reason: "Device has temporary access only. Administrator approval is required for unrestricted access to protected resources.",
+        actor: identity.walletAddress,
+        ipAddress: context.ipAddress ?? null,
+        userAgent: context.userAgent ?? null,
+      },
+      now,
+    );
+
+    throw new AppError(
+      "Device has temporary access only. Administrator approval is required to access protected corporate resources.",
+      403,
+      "DEVICE_APPROVAL_REQUIRED",
+      { deviceId: device.deviceId, accessLevel: "TEMPORARY" },
+    );
+  }
+
   // 4. Role and Permission Validation (Granular resource:action check)
   const permission = `${resource.trim()}:${action.trim()}`;
   const allowed = hasPermission(identity.identityId, resource, action);
