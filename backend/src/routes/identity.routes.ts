@@ -35,20 +35,20 @@ identityRouter.post(
   validateBody(createIdentitySchema),
   asyncHandler(createIdentityController),
 );
-identityRouter.get("/", authenticateRequest, requireAuthorization("policies", "manage"), listIdentitiesController);
+identityRouter.get("/", authenticateRequest, requireAuthorization("policies", "manage"), asyncHandler(listIdentitiesController));
 identityRouter.get(
   "/wallet/:walletAddress",
   authenticateRequest,
   requireAuthorization("policies", "manage"),
-  getIdentityByWalletController,
+  asyncHandler(getIdentityByWalletController),
 );
-identityRouter.get("/:identityId", authenticateRequest, requireAuthorization("policies", "manage"), getIdentityController);
+identityRouter.get("/:identityId", authenticateRequest, requireAuthorization("policies", "manage"), asyncHandler(getIdentityController));
 identityRouter.patch(
   "/:identityId/profile",
   authenticateRequest,
   requireAuthorization("policies", "manage"),
   validateBody(profileSchema),
-  updateIdentityProfileController,
+  asyncHandler(updateIdentityProfileController),
 );
 identityRouter.patch(
   "/:identityId/status",

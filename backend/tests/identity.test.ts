@@ -47,7 +47,7 @@ describe("identity endpoints", () => {
       walletAddress: wallet.address,
       displayName: "Test User",
       status: "ACTIVE",
-      roles: [],
+      roles: ["employee"],
     });
 
     const identityId = createResponse.body.identity.identityId as string;

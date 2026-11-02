@@ -57,7 +57,7 @@ export function registerIdentity(
     walletAddress: normalizedWalletAddress,
     displayName: displayName.trim(),
     status: "ACTIVE",
-    roles: [],
+    roles: ["employee"],
     createdAt: now,
     updatedAt: now,
   };
@@ -70,7 +70,7 @@ export function registerIdentity(
       walletAddress: normalizedWalletAddress,
       displayName: identity.displayName,
       status: "ACTIVE",
-      roles: [],
+      roles: ["employee"],
     }).catch((err) => {
       console.error("Failed to persist identity to MongoDB:", err);
     });
@@ -89,7 +89,7 @@ export async function registerIdentityAsync(walletAddress: string, displayName: 
     walletAddress: normalizedWalletAddress,
     displayName: displayName.trim(),
     status: "ACTIVE",
-    roles: [],
+    roles: ["employee"],
     createdAt: now,
     updatedAt: now,
   };
@@ -102,7 +102,7 @@ export async function registerIdentityAsync(walletAddress: string, displayName: 
       walletAddress: normalizedWalletAddress,
       displayName: identity.displayName,
       status: "ACTIVE",
-      roles: [],
+      roles: ["employee"],
     });
     return saved;
   }
@@ -228,6 +228,13 @@ export function updateIdentityStatus(identityId: string, status: IdentityStatus)
 
 export async function updateIdentityStatusAsync(identityId: string, status: IdentityStatus): Promise<Identity> {
   const identity = await getIdentityAsync(identityId);
+  if (status === "REVOKED" && identity.roles.includes("admin")) {
+    const activeAdmins = (await listIdentitiesAsync()).filter((candidate) =>
+      candidate.status === "ACTIVE" && candidate.roles.includes("admin"));
+    if (activeAdmins.length <= 1) {
+      throw new AppError("The last active administrator cannot be revoked.", 409, "IDENTITY_LAST_ADMIN");
+    }
+  }
   const updatedIdentity = { ...identity, status, updatedAt: new Date().toISOString() };
   identities.set(identityId, updatedIdentity);
 
@@ -321,6 +328,13 @@ export function removeRole(identityId: string, role: string): Identity {
 export async function removeRoleAsync(identityId: string, role: string): Promise<Identity> {
   const identity = await getIdentityAsync(identityId);
   const normalizedRole = role.trim();
+  if (normalizedRole === "admin" && identity.status === "ACTIVE" && identity.roles.includes("admin")) {
+    const activeAdmins = (await listIdentitiesAsync()).filter((candidate) =>
+      candidate.status === "ACTIVE" && candidate.roles.includes("admin"));
+    if (activeAdmins.length <= 1) {
+      throw new AppError("The last active administrator cannot lose the admin role.", 409, "IDENTITY_LAST_ADMIN");
+    }
+  }
   const updatedIdentity = {
     ...identity,
     roles: identity.roles.filter((assignedRole) => assignedRole !== normalizedRole),

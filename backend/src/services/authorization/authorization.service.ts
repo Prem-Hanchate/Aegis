@@ -108,13 +108,13 @@ export async function authorizeRequestAsync(identityId: string, resource: string
 }
 
 export function requireAuthorization(resource: string, action: string) {
-  const middleware: RequestHandler = (request, _response, next) => {
+  const middleware: RequestHandler = async (request, _response, next) => {
     try {
       const authenticatedRequest = request as RequestWithAuth;
       if (!authenticatedRequest.auth) {
         throw new AppError("The request is not authenticated.", 401, "SESSION_MISSING");
       }
-      authorizeRequest(authenticatedRequest.auth.identityId, resource, action);
+      await authorizeRequestAsync(authenticatedRequest.auth.identityId, resource, action);
       next();
     } catch (error) {
       next(error);

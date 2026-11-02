@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { AppError } from "../../middleware/AppError.js";
 import { getIdentity } from "../identity.service.js";
-import { getActiveSession } from "../session.service.js";
+import { getActiveSessionAsync, hashToken } from "../session.service.js";
 import { getActiveDevice, getDevice } from "../device.service.js";
 import { hasPermission, getPermissionsForRoles } from "./authorization.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
@@ -120,16 +120,16 @@ export async function evaluateZeroTrustAuthorization(
 
   let session: { sessionId: string; identityId: string; deviceId: string | null; expiresAt: string; status: string; createdAt?: string | Date };
   try {
-    session = getActiveSession(accessToken, now);
+    session = await getActiveSessionAsync(accessToken, now);
   } catch (error) {
     if (isDbConnected()) {
       // Check MongoDB session repository as fallback
-      const sessionDoc = await SessionModel.findOne({ status: "ACTIVE" }).exec();
+      const sessionDoc = await SessionModel.findOne({ tokenHash: hashToken(accessToken), status: "ACTIVE" }).exec();
       if (!sessionDoc) throw error;
       session = {
         sessionId: sessionDoc.sessionId,
         identityId: sessionDoc.identityId,
-        deviceId: sessionDoc.deviceId,
+        deviceId: sessionDoc.deviceId ?? null,
         expiresAt: sessionDoc.expiresAt.toISOString(),
         status: sessionDoc.status,
         createdAt: sessionDoc.createdAt,

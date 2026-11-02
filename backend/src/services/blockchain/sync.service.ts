@@ -18,6 +18,7 @@ import {
 import {
   assignRoleAsync,
   getIdentity,
+  listIdentities,
   removeRoleAsync,
   updateIdentityStatusAsync,
 } from "../identity.service.js";
@@ -267,8 +268,6 @@ export class BlockchainSyncService {
         }
         break;
       }
-      }
-
       case "IdentityActivated": {
         // args: { identityId, walletAddress, timestamp }
         const identity = await this.resolveIdentity(args.identityId, args.walletAddress);
@@ -503,7 +502,7 @@ export class BlockchainSyncService {
 
       // Query raw logs/events for the contract in the range
       const events = await item.contract.queryFilter("*", fromBlock, toBlock);
-      if (events.length > 0) console.log(`[syncBlockRange] ${item.name} found ${events.length} events from ${fromBlock} to ${toBlock}:`, events.map(e => e.eventName));
+      if (events.length > 0) console.log(`[syncBlockRange] ${item.name} found ${events.length} events from ${fromBlock} to ${toBlock}:`, events.map(e => ("fragment" in e ? e.fragment?.name : "unknown")));
 
 
 

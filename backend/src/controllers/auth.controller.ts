@@ -1,16 +1,16 @@
 import type { Request, Response } from "express";
-import { issueLoginChallenge, verifyLoginChallenge } from "../services/auth/auth.service.js";
-import { revokeSession } from "../services/session.service.js";
+import { issueLoginChallengeAsync, verifyLoginChallengeAsync } from "../services/auth/auth.service.js";
+import { revokeSessionAsync } from "../services/session.service.js";
 import { recordAuthenticationFailure, requireAuthenticatedRequest } from "../middleware/authentication.js";
 import { revokeAllSessionsForIdentity } from "../services/session.service.js";
-import { getIdentity } from "../services/identity.service.js";
+import { getIdentityAsync } from "../services/identity.service.js";
 import { getPermissionsForRoles } from "../services/authorization/authorization.service.js";
 import type { AuthVerificationResult } from "../services/auth/challenge.types.js";
 
-export function createLoginChallengeController(request: Request, response: Response) {
+export async function createLoginChallengeController(request: Request, response: Response) {
   const { walletAddress } = request.body as { walletAddress: string };
   try {
-    const challenge = issueLoginChallenge(walletAddress);
+    const challenge = await issueLoginChallengeAsync(walletAddress);
 
     return response.status(201).json({
       challenge,
@@ -21,7 +21,7 @@ export function createLoginChallengeController(request: Request, response: Respo
   }
 }
 
-export function verifyLoginChallengeController(request: Request, response: Response) {
+export async function verifyLoginChallengeController(request: Request, response: Response) {
   const { walletAddress, message, signature } = request.body as {
     walletAddress: string;
     message: string;
@@ -30,7 +30,7 @@ export function verifyLoginChallengeController(request: Request, response: Respo
 
   let result: AuthVerificationResult;
   try {
-    result = verifyLoginChallenge(walletAddress, message, signature);
+    result = await verifyLoginChallengeAsync(walletAddress, message, signature);
   } catch (error) {
     recordAuthenticationFailure(request, error instanceof Error ? error.message : "Challenge verification failed.");
     throw error;
@@ -42,7 +42,7 @@ export function verifyLoginChallengeController(request: Request, response: Respo
   });
 }
 
-export function logoutController(request: Request, response: Response) {
+export async function logoutController(request: Request, response: Response) {
   const authorization = request.header("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
   if (!accessToken) {
@@ -51,16 +51,16 @@ export function logoutController(request: Request, response: Response) {
     });
   }
 
-  revokeSession(accessToken);
+  await revokeSessionAsync(accessToken);
   return response.status(204).send();
 }
 
-export function currentSessionController(request: Request, response: Response) {
+export async function currentSessionController(request: Request, response: Response) {
   const { auth } = requireAuthenticatedRequest(request);
   return response.status(200).json({
     session: auth,
     identity: {
-      ...getIdentity(auth.identityId),
+      ...(await getIdentityAsync(auth.identityId)),
       permissions: getPermissionsForRoles(auth.roles),
     },
   });

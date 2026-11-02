@@ -2,32 +2,32 @@ import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { env } from "./config/env.js";
 import {
-  assignRole,
-  getIdentityByWallet,
-  registerIdentity,
-  updateIdentityStatus,
+  assignRoleAsync,
+  getIdentityByWalletAsync,
+  registerIdentityAsync,
+  updateIdentityStatusAsync,
 } from "./services/identity.service.js";
 
-function bootstrapAdmin() {
-  if (env.isProduction || !env.bootstrapAdminWallet) {
+async function bootstrapAdmin() {
+  if (!env.bootstrapAdminWallet) {
     return;
   }
 
-  const existingIdentity = getIdentityByWallet(env.bootstrapAdminWallet);
+  const existingIdentity = await getIdentityByWalletAsync(env.bootstrapAdminWallet);
   const identity = existingIdentity
-    ? updateIdentityStatus(existingIdentity.identityId, "ACTIVE")
-    : registerIdentity(env.bootstrapAdminWallet, env.bootstrapAdminDisplayName);
-  assignRole(identity.identityId, "admin");
-  console.log(`Bootstrapped development administrator for ${identity.walletAddress} (active)`);
+    ? await updateIdentityStatusAsync(existingIdentity.identityId, "ACTIVE")
+    : await registerIdentityAsync(env.bootstrapAdminWallet, env.bootstrapAdminDisplayName);
+  await assignRoleAsync(identity.identityId, "admin");
+  console.log(`Bootstrapped administrator for ${identity.walletAddress} (active, admin role)`);
 }
 
 async function bootstrap() {
   await connectDatabase();
-  bootstrapAdmin();
+  await bootstrapAdmin();
 
   const app = createApp();
-  const server = app.listen(env.port, () => {
-    console.log(`Aegis backend listening on port ${env.port}`);
+  const server = app.listen(env.port, env.host, () => {
+    console.log(`Aegis backend listening on http://${env.host}:${env.port}`);
   });
 
   const shutdown = (signal: string) => {

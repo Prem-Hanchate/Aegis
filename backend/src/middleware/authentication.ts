@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "./AppError.js";
-import { getIdentity } from "../services/identity.service.js";
-import { getActiveSession } from "../services/session.service.js";
+import { getIdentityAsync } from "../services/identity.service.js";
+import { getActiveSessionAsync } from "../services/session.service.js";
 import { recordAuditEvent } from "../services/audit/audit.service.js";
 import { getActiveDevice } from "../services/device.service.js";
 
@@ -14,7 +14,7 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-export function authenticateRequest(request: Request, _response: Response, next: NextFunction) {
+export async function authenticateRequest(request: Request, _response: Response, next: NextFunction) {
   const authorization = request.header("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
 
@@ -23,8 +23,8 @@ export function authenticateRequest(request: Request, _response: Response, next:
   }
 
   try {
-    const session = getActiveSession(accessToken);
-    const identity = getIdentity(session.identityId);
+    const session = await getActiveSessionAsync(accessToken);
+    const identity = await getIdentityAsync(session.identityId);
     if (identity.status !== "ACTIVE") {
       throw new AppError("The identity is revoked.", 403, "AUTH_IDENTITY_REVOKED");
     }

@@ -24,6 +24,22 @@ export function saveChallenge(challenge: LoginChallenge) {
       console.error("Failed to persist challenge to MongoDB:", err);
     });
   }
+
+}
+
+export async function saveChallengeAsync(challenge: LoginChallenge) {
+  challengeStore.set(challenge.nonce, challenge);
+  if (isDbConnected()) {
+    await challengeRepository.create({
+      nonce: challenge.nonce,
+      walletAddress: challenge.walletAddress,
+      domain: challenge.domain,
+      message: challenge.message,
+      expiresAt: new Date(challenge.expiresAt),
+      purpose: challenge.purpose,
+      createdAt: new Date(challenge.issuedAt),
+    });
+  }
 }
 
 export function getChallenge(nonce: string) {

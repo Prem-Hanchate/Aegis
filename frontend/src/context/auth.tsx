@@ -179,6 +179,21 @@ export function AuthStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (state.status !== "authenticated" || !state.session?.accessToken || isTestMode) return;
+    const token = state.session.accessToken;
+    const checkSession = async () => {
+      try {
+        await fetchCurrentSession(token);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Your session is no longer active.";
+        clearSession(message);
+      }
+    };
+    const interval = window.setInterval(() => void checkSession(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [state.status, state.session?.accessToken, clearSession]);
+
   const setError = useCallback((errorMessage: string) => {
     setState((current) => ({
       ...current,

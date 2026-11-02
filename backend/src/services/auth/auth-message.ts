@@ -1,6 +1,7 @@
 import type { IssuedLoginChallenge } from "./challenge.types.js";
+import { env } from "../../config/env.js";
 
-export const AUTH_DOMAIN = "aegis.local";
+export const AUTH_DOMAIN = env.authDomain;
 export const AUTH_PURPOSE = "Authenticate with Aegis";
 
 export function createAuthMessage(payload: Omit<IssuedLoginChallenge, "message">) {

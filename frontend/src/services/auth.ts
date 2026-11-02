@@ -1,4 +1,5 @@
 import type { AuthChallengeResponse, AuthMeResponse, AuthVerificationResponse } from "../types/auth";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -17,7 +18,7 @@ async function requestJson<T>(path: string, init: RequestInit, accessToken?: str
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
 
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
       ...headers,
